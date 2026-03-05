@@ -192,6 +192,22 @@ interface CollectedElement {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Z-negation matrix for converting between right-handed and left-handed Y-up
+ * coordinate systems.  S is its own inverse.
+ */
+const NEGATE_Z = Matrix.FromValues(
+  1, 0, 0, 0,
+  0, 1, 0, 0,
+  0, 0, -1, 0,
+  0, 0, 0, 1,
+);
+
+/** Convert an IFC (right-handed) 4×4 transform to Babylon (left-handed): S · M · S */
+function rhToLhTransform(m: Matrix): Matrix {
+  return NEGATE_Z.multiply(m).multiply(NEGATE_Z);
+}
+
 function colorKey(c: { x: number; y: number; z: number; w: number }): string {
   return `${c.x}_${c.y}_${c.z}_${c.w}`;
 }
@@ -238,7 +254,7 @@ function createMeshFromGeometry(
   if (vRaw.length === 0) return null;
 
   // De-interleave: 6 floats per vertex [x, y, z, nx, ny, nz]
-  // Negate Z to convert from IFC right-handed to Babylon.js left-handed
+  // Negate Z to convert from right-handed Y-up (web-ifc) to left-handed Y-up (Babylon.js)
   const vertexCount = vRaw.length / 6;
   const positions = new Float32Array(vertexCount * 3);
   const normals = new Float32Array(vertexCount * 3);
@@ -251,6 +267,13 @@ function createMeshFromGeometry(
     normals[d] = vRaw[s + 3];
     normals[d + 1] = vRaw[s + 4];
     normals[d + 2] = -vRaw[s + 5];
+  }
+
+  // Z-negation reverses winding; flip each triangle to restore correct face orientation
+  for (let i = 0; i < indices.length; i += 3) {
+    const tmp = indices[i + 1];
+    indices[i + 1] = indices[i + 2];
+    indices[i + 2] = tmp;
   }
 
   const mesh = new Mesh(name, scene);
@@ -284,7 +307,7 @@ function processFlatMesh(
     const pg = flatMesh.geometries.get(j);
     const ck = colorKey(pg.color);
     const cacheKey = `${pg.geometryExpressID}_${ck}_${config.occlusion}`;
-    const transform = Matrix.FromArray(pg.flatTransformation);
+    const transform = rhToLhTransform(Matrix.FromArray(pg.flatTransformation));
 
     let cached = meshCache.get(cacheKey);
     if (!cached) {
