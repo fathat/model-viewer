@@ -3,9 +3,12 @@ import {
   AbstractMesh,
   Mesh,
   VertexData,
+  VertexBuffer,
   Matrix,
+  Vector3,
   PBRMetallicRoughnessMaterial,
   Color3,
+  Constants,
 } from "@babylonjs/core";
 import * as WEBIFC from "web-ifc";
 
@@ -395,6 +398,9 @@ export async function loadIfcModel(
 
   // ---- Process collected elements (already in priority order) ----
 
+  // Block material dirty checks during bulk mesh creation — we'll reconcile once at the end.
+  scene.blockMaterialDirtyMechanism = true;
+
   const meshCache = new Map<string, { mesh: Mesh; entry: IfcMeshEntry }>();
   const materialCache = new Map<string, PBRMetallicRoughnessMaterial>();
   const allEntries: IfcMeshEntry[] = [];
@@ -463,9 +469,20 @@ export async function loadIfcModel(
   // Final emit to capture any remaining updates
   emitCategories();
 
-  // All instances added — make meshes visible
+  // Restore material dirty mechanism and reconcile all materials once
+  scene.blockMaterialDirtyMechanism = false;
+  scene.markAllMaterialsAsDirty(Constants.MATERIAL_AllDirtyFlag);
+
+  // Freeze materials — model is static, no material property changes after load
+  for (const mat of materialCache.values()) {
+    mat.freeze();
+  }
+
+  // All instances added — make meshes visible and freeze transforms
   for (const entry of allEntries) {
     entry.mesh.setEnabled(true);
+    entry.mesh.freezeWorldMatrix();
+    entry.mesh.doNotSyncBoundingInfo = true;
   }
 
   ifcAPI.CloseModel(modelId);
@@ -482,6 +499,200 @@ export async function loadIfcModel(
       }
       for (const mat of materialCache.values()) {
         mat.dispose();
+      }
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Post-load mesh merging — reduces draw calls by combining meshes that share
+// the same material and IFC category into single merged meshes.
+// ---------------------------------------------------------------------------
+
+/**
+ * Bake a thin-instanced mesh into a single VertexData with all instance
+ * transforms applied to the vertex positions and normals.
+ */
+function bakeThinInstances(mesh: Mesh): VertexData {
+  const basePositions = mesh.getVerticesData(VertexBuffer.PositionKind)!;
+  const baseNormals = mesh.getVerticesData(VertexBuffer.NormalKind)!;
+  const baseIndices = mesh.getIndices()!;
+  const instanceCount = mesh.thinInstanceCount;
+
+  // Read the raw matrix buffer (16 floats per instance, column-major)
+  const matrixBuffer =
+    mesh._thinInstanceDataStorage?.matrixData as Float32Array | undefined;
+
+  // If there are no thin instances or no matrix data, return the base geometry as-is
+  if (!matrixBuffer || instanceCount <= 0) {
+    const vd = new VertexData();
+    vd.positions = new Float32Array(basePositions);
+    vd.normals = new Float32Array(baseNormals);
+    vd.indices = new Int32Array(baseIndices);
+    return vd;
+  }
+
+  const vertexCount = basePositions.length / 3;
+  const indexCount = baseIndices.length;
+
+  const allPositions = new Float32Array(vertexCount * 3 * instanceCount);
+  const allNormals = new Float32Array(vertexCount * 3 * instanceCount);
+  const allIndices = new Int32Array(indexCount * instanceCount);
+
+  const tmpPos = new Vector3();
+  const tmpNorm = new Vector3();
+
+  for (let inst = 0; inst < instanceCount; inst++) {
+    const matrix = Matrix.FromArray(matrixBuffer, inst * 16);
+    const posOffset = inst * vertexCount * 3;
+    const idxOffset = inst * indexCount;
+    const vertOffset = inst * vertexCount;
+
+    // Transform positions
+    for (let v = 0; v < vertexCount; v++) {
+      const s = v * 3;
+      tmpPos.set(basePositions[s], basePositions[s + 1], basePositions[s + 2]);
+      Vector3.TransformCoordinatesToRef(tmpPos, matrix, tmpPos);
+      allPositions[posOffset + s] = tmpPos.x;
+      allPositions[posOffset + s + 1] = tmpPos.y;
+      allPositions[posOffset + s + 2] = tmpPos.z;
+    }
+
+    // Transform normals (direction only — upper 3x3)
+    for (let v = 0; v < vertexCount; v++) {
+      const s = v * 3;
+      tmpNorm.set(baseNormals[s], baseNormals[s + 1], baseNormals[s + 2]);
+      Vector3.TransformNormalToRef(tmpNorm, matrix, tmpNorm);
+      tmpNorm.normalizeToRef(tmpNorm);
+      allNormals[posOffset + s] = tmpNorm.x;
+      allNormals[posOffset + s + 1] = tmpNorm.y;
+      allNormals[posOffset + s + 2] = tmpNorm.z;
+    }
+
+    // Offset indices
+    for (let i = 0; i < indexCount; i++) {
+      allIndices[idxOffset + i] = baseIndices[i] + vertOffset;
+    }
+  }
+
+  const vd = new VertexData();
+  vd.positions = allPositions;
+  vd.normals = allNormals;
+  vd.indices = allIndices;
+  return vd;
+}
+
+/**
+ * Merge meshes in a LoadedModel that share the same material and IFC category.
+ * Meshes with more than `instanceThreshold` thin instances are kept as-is
+ * (hardware instancing is already efficient for those).
+ *
+ * Returns a new LoadedModel with the merged entries.
+ */
+export function mergeLoadedModel(
+  model: LoadedModel,
+  scene: Scene,
+  instanceThreshold = 10,
+): LoadedModel {
+  // Group entries by material + category
+  const groups = new Map<
+    string,
+    { toMerge: IfcMeshEntry[]; toKeep: IfcMeshEntry[] }
+  >();
+
+  for (const entry of model.entries) {
+    const matId = entry.mesh.material?.uniqueId ?? 0;
+    const groupKey = `${matId}|${entry.meta.ifcTypeLabel}`;
+    let group = groups.get(groupKey);
+    if (!group) {
+      group = { toMerge: [], toKeep: [] };
+      groups.set(groupKey, group);
+    }
+
+    if (entry.mesh.thinInstanceCount > instanceThreshold) {
+      group.toKeep.push(entry);
+    } else {
+      group.toMerge.push(entry);
+    }
+  }
+
+  const newEntries: IfcMeshEntry[] = [];
+  let mergedCount = 0;
+  let keptCount = 0;
+
+  for (const [, group] of groups) {
+    // Keep high-instance meshes as-is
+    for (const entry of group.toKeep) {
+      newEntries.push(entry);
+      keptCount++;
+    }
+
+    // Merge low-instance meshes in this group
+    if (group.toMerge.length === 0) continue;
+
+    // If only 1 mesh with 1 instance, no benefit to merging — keep it
+    if (
+      group.toMerge.length === 1 &&
+      group.toMerge[0].mesh.thinInstanceCount <= 1
+    ) {
+      newEntries.push(group.toMerge[0]);
+      keptCount++;
+      continue;
+    }
+
+    // Bake and merge
+    const bakedMeshes: Mesh[] = [];
+    const allExpressIDs: number[] = [];
+    const representativeEntry = group.toMerge[0];
+    const sharedMaterial = representativeEntry.mesh.material;
+
+    for (const entry of group.toMerge) {
+      const vd = bakeThinInstances(entry.mesh);
+      const baked = new Mesh(`baked-${entry.mesh.name}`, scene);
+      vd.applyToMesh(baked);
+      baked.material = sharedMaterial;
+      bakedMeshes.push(baked);
+      allExpressIDs.push(...entry.expressIDs);
+
+      // Dispose the original thin-instance mesh
+      entry.mesh.dispose(false, false);
+    }
+
+    const merged = Mesh.MergeMeshes(
+      bakedMeshes,
+      true, // disposeSource
+      true, // allow32BitsIndices
+    );
+
+    if (merged) {
+      merged.material = sharedMaterial;
+      // Merged meshes span large areas — occlusion queries on their bounding
+      // box cause entire categories to vanish when the camera is inside the
+      // building.  Draw-call savings come from the merge itself, so skip
+      // occlusion on these.
+      merged.occlusionType = AbstractMesh.OCCLUSION_TYPE_NONE;
+      merged.freezeWorldMatrix();
+      merged.doNotSyncBoundingInfo = true;
+
+      newEntries.push({
+        mesh: merged,
+        meta: { ...representativeEntry.meta },
+        expressIDs: allExpressIDs,
+      });
+      mergedCount += group.toMerge.length;
+    }
+  }
+
+  console.log(
+    `Mesh merge complete: ${model.entries.length} → ${newEntries.length} meshes ` +
+      `(merged ${mergedCount}, kept ${keptCount})`,
+  );
+
+  return {
+    entries: newEntries,
+    dispose() {
+      for (const entry of newEntries) {
+        entry.mesh.dispose(false, false);
       }
     },
   };

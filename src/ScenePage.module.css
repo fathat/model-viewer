@@ -91,3 +91,18 @@
   cursor: pointer;
   white-space: nowrap;
 }
+
+.statsOverlay {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  z-index: 1;
+  background-color: rgba(0, 0, 0, 0.7);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  gap: 16px;
+  color: white;
+  font-size: 12px;
+  font-family: monospace;
+}

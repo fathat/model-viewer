@@ -10,12 +10,13 @@ import {
   PBRMetallicRoughnessMaterial,
   Color3,
   SSAO2RenderingPipeline,
+  SceneInstrumentation,
 } from "@babylonjs/core";
 import { SceneComponent } from "./SceneComponent";
 import "./App.css";
 import styles from "./ScenePage.module.css";
-import { loadIfcModel, type LoadedModel, type IfcCategoryInfo } from "./ifc-loader";
-import { useCallback, useRef, useState } from "react";
+import { loadIfcModel, mergeLoadedModel, type LoadedModel, type IfcCategoryInfo } from "./ifc-loader";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface IfcCategoryState extends IfcCategoryInfo {
   visible: boolean;
@@ -40,6 +41,7 @@ class SceneManager {
   private envTexture: BaseTexture | null = null;
   private skybox: Mesh | null = null;
   private ssaoPipeline: SSAO2RenderingPipeline | null = null;
+  readonly instrumentation: SceneInstrumentation;
 
   constructor(public readonly scene: Scene) {
     this.camera = new FreeCamera("camera1", new Vector3(0, 5, -10), scene);
@@ -77,7 +79,12 @@ class SceneManager {
     groundMat.roughness = 1;
     this.ground.material = groundMat;
 
+    scene.skipPointerMovePicking = true;
     scene.enablePrePassRenderer();
+
+    this.instrumentation = new SceneInstrumentation(scene);
+    this.instrumentation.captureFrameTime = true;
+    this.instrumentation.captureRenderTime = true;
   }
 
   setEnvironment(url: string | null) {
@@ -95,12 +102,19 @@ class SceneManager {
       this.skybox =
         this.scene.createDefaultSkybox(hdrTexture, true, 10000) ?? null;
       this.light.setEnabled(false);
+      this.scene.autoClearDepthAndStencil = false;
     } else {
       this.light.setEnabled(true);
+      this.scene.autoClearDepthAndStencil = true;
     }
   }
 
   setSsaoEnabled(enabled: boolean) {
+    // Unfreeze materials so the pre-pass renderer can update shader defines
+    for (const mat of this.scene.materials) {
+      mat.unfreeze();
+    }
+
     if (enabled && !this.ssaoPipeline) {
       const ssao = new SSAO2RenderingPipeline("ssao", this.scene, {
         ssaoRatio: 0.5,
@@ -118,6 +132,11 @@ class SceneManager {
     } else if (!enabled && this.ssaoPipeline) {
       this.ssaoPipeline.dispose();
       this.ssaoPipeline = null;
+    }
+
+    // Re-freeze materials after pipeline reconfiguration
+    for (const mat of this.scene.materials) {
+      mat.freeze();
     }
   }
 
@@ -145,6 +164,36 @@ export function ScenePage() {
     null | "extracting" | number
   >(null);
   const [ifcCategories, setIfcCategories] = useState<IfcCategoryState[]>([]);
+
+  const [stats, setStats] = useState<{
+    fps: number;
+    frameTime: number;
+    renderTime: number;
+    active: number;
+    total: number;
+  } | null>(null);
+
+  // Poll scene stats when a model is loaded.
+  // Re-run when loadingState changes — the interval starts once loading finishes (null).
+  useEffect(() => {
+    const mgr = sceneManagerRef.current;
+    if (!loadedModelRef.current || !mgr) {
+      setStats(null);
+      return;
+    }
+    const id = setInterval(() => {
+      const scene = mgr.scene;
+      const inst = mgr.instrumentation;
+      setStats({
+        fps: Math.round(scene.getEngine().getFps()),
+        frameTime: +inst.frameTimeCounter.lastSecAverage.toFixed(1),
+        renderTime: +inst.renderTimeCounter.lastSecAverage.toFixed(1),
+        active: scene.getActiveMeshes().length,
+        total: scene.meshes.length,
+      });
+    }, 500);
+    return () => clearInterval(id);
+  }, [loadingState]);
 
   const toggleCategory = useCallback((label: string, visible: boolean) => {
     const model = loadedModelRef.current;
@@ -196,7 +245,7 @@ export function ScenePage() {
               setLoadingState("extracting");
               try {
                 const buffer = await file.arrayBuffer();
-                const model = await loadIfcModel(
+                const rawModel = await loadIfcModel(
                   mgr.scene,
                   new Uint8Array(buffer),
                   setLoadingState,
@@ -210,6 +259,7 @@ export function ScenePage() {
                       })),
                     ),
                 );
+                const model = mergeLoadedModel(rawModel, mgr.scene);
                 loadedModelRef.current = model;
               } finally {
                 setLoadingState(null);
@@ -286,6 +336,16 @@ export function ScenePage() {
               {cat.label} ({cat.count})
             </label>
           ))}
+        </div>
+      )}
+      {stats && (
+        <div className={styles.statsOverlay}>
+          <span>FPS: {stats.fps}</span>
+          <span>Frame: {stats.frameTime}ms</span>
+          <span>Render: {stats.renderTime}ms</span>
+          <span>
+            Active: {stats.active} / {stats.total}
+          </span>
         </div>
       )}
     </>
