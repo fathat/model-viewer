@@ -9,6 +9,7 @@ import {
 import { SceneComponent } from "./SceneComponent"; // uses above component in same directory
 // import SceneComponent from 'babylonjs-hook'; // if you install 'babylonjs-hook' NPM.
 import "./App.css";
+import { loadIfcModel } from "./ifc-loader";
 
 let box: Mesh;
 
@@ -54,12 +55,18 @@ const onRender = (scene: Scene) => {
 
 export function ScenePage() {
   return (
-    <div>
+    <>
+      <button
+        style={{ position: "fixed", top: 16, left: 16, zIndex: 1 }}
+        onClick={() => loadIfcModel(new Uint8Array())}
+      >
+        Load IFC Model
+      </button>
       <SceneComponent
         antialias
         onSceneReady={onSceneReady}
         onRender={onRender}
       />
-    </div>
+    </>
   );
 }
