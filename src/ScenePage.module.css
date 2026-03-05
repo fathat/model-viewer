@@ -100,9 +100,14 @@
   background-color: rgba(0, 0, 0, 0.7);
   border-radius: 8px;
   padding: 8px 12px;
-  display: flex;
-  gap: 16px;
   color: white;
   font-size: 12px;
   font-family: monospace;
+}
+
+.statsLoadingNote {
+  display: block;
+  margin-top: 4px;
+  color: #ffcc00;
+  font-size: 11px;
 }

@@ -289,11 +289,11 @@ export function ScenePage() {
     total: number;
   } | null>(null);
 
-  // Poll scene stats when a model is loaded.
-  // Re-run when loadingState changes — the interval starts once loading finishes (null).
+  // Poll scene stats whenever the scene is ready.
+  const [sceneReady, setSceneReady] = useState(false);
   useEffect(() => {
     const mgr = sceneManagerRef.current;
-    if (!loadedModelRef.current || !mgr) {
+    if (!sceneReady || !mgr) {
       setStats(null);
       return;
     }
@@ -309,7 +309,7 @@ export function ScenePage() {
       });
     }, 500);
     return () => clearInterval(id);
-  }, [loadingState]);
+  }, [sceneReady]);
 
   const toggleCategory = useCallback((label: string, visible: boolean) => {
     const model = loadedModelRef.current;
@@ -326,6 +326,7 @@ export function ScenePage() {
 
   const onSceneReady = (scene: Scene) => {
     sceneManagerRef.current = new SceneManager(scene);
+    setSceneReady(true);
   };
 
   const onRender = () => {
@@ -478,12 +479,19 @@ export function ScenePage() {
       )}
       {stats && (
         <div className={styles.statsOverlay}>
-          <span>FPS: {stats.fps}</span>
-          <span>Frame: {stats.frameTime}ms</span>
-          <span>Render: {stats.renderTime}ms</span>
-          <span>
-            Active: {stats.active} / {stats.total}
-          </span>
+          <div style={{ display: "flex", gap: 16 }}>
+            <span>FPS: {stats.fps}</span>
+            <span>Frame: {stats.frameTime}ms</span>
+            <span>Render: {stats.renderTime}ms</span>
+            <span>
+              Active: {stats.active} / {stats.total}
+            </span>
+          </div>
+          {loadingState != null && (
+            <span className={styles.statsLoadingNote}>
+              Model loading will affect performance
+            </span>
+          )}
         </div>
       )}
     </>
