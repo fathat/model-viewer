@@ -9,6 +9,7 @@ import {
   type BaseTexture,
   PBRMetallicRoughnessMaterial,
   Color3,
+  SSAO2RenderingPipeline,
 } from "@babylonjs/core";
 import { SceneComponent } from "./SceneComponent";
 import "./App.css";
@@ -34,6 +35,7 @@ class SceneManager {
   private light: HemisphericLight;
   private envTexture: BaseTexture | null = null;
   private skybox: Mesh | null = null;
+  private ssaoPipeline: SSAO2RenderingPipeline | null = null;
 
   constructor(public readonly scene: Scene) {
     this.camera = new FreeCamera("camera1", new Vector3(0, 5, -10), scene);
@@ -62,11 +64,16 @@ class SceneManager {
       { width: 6, height: 6 },
       this.scene,
     );
-    const groundMat = new PBRMetallicRoughnessMaterial("ground-mat", this.scene);
+    const groundMat = new PBRMetallicRoughnessMaterial(
+      "ground-mat",
+      this.scene,
+    );
     groundMat.baseColor = new Color3(0.5, 0.5, 0.5);
     groundMat.metallic = 0;
     groundMat.roughness = 1;
     this.ground.material = groundMat;
+
+    scene.enablePrePassRenderer();
   }
 
   setEnvironment(url: string | null) {
@@ -86,6 +93,27 @@ class SceneManager {
       this.light.setEnabled(false);
     } else {
       this.light.setEnabled(true);
+    }
+  }
+
+  setSsaoEnabled(enabled: boolean) {
+    if (enabled && !this.ssaoPipeline) {
+      const ssao = new SSAO2RenderingPipeline("ssao", this.scene, {
+        ssaoRatio: 0.5,
+        blurRatio: 1.0,
+      });
+      ssao.radius = 2;
+      ssao.totalStrength = 1.0;
+      ssao.samples = 16;
+      ssao.expensiveBlur = true;
+      this.scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline(
+        "ssao",
+        this.camera,
+      );
+      this.ssaoPipeline = ssao;
+    } else if (!enabled && this.ssaoPipeline) {
+      this.ssaoPipeline.dispose();
+      this.ssaoPipeline = null;
     }
   }
 
@@ -127,43 +155,43 @@ export function ScenePage() {
         <button
           className={styles.loadButton}
           onClick={() => {
-          const mgr = sceneManagerRef.current;
-          if (!mgr) {
-            console.error(
-              "SceneManager not initialized yet -- cannot load IFC model",
-            );
-            return;
-          }
-          const input = document.createElement("input");
-          input.type = "file";
-          input.accept = ".ifc";
-          input.onchange = async () => {
-            const file = input.files?.[0];
-            if (!file) return;
-
-            // Dispose previous IFC model if any
-            loadedModelRef.current?.dispose();
-
-            // Remove placeholder geometry
-            mgr.clearPlaceholder();
-
-            setLoadingState("extracting");
-            try {
-              const buffer = await file.arrayBuffer();
-              loadedModelRef.current = await loadIfcModel(
-                mgr.scene,
-                new Uint8Array(buffer),
-                setLoadingState,
+            const mgr = sceneManagerRef.current;
+            if (!mgr) {
+              console.error(
+                "SceneManager not initialized yet -- cannot load IFC model",
               );
-            } finally {
-              setLoadingState(null);
+              return;
             }
-          };
-          input.click();
-        }}
-      >
-        Load IFC Model
-      </button>
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = ".ifc";
+            input.onchange = async () => {
+              const file = input.files?.[0];
+              if (!file) return;
+
+              // Dispose previous IFC model if any
+              loadedModelRef.current?.dispose();
+
+              // Remove placeholder geometry
+              mgr.clearPlaceholder();
+
+              setLoadingState("extracting");
+              try {
+                const buffer = await file.arrayBuffer();
+                loadedModelRef.current = await loadIfcModel(
+                  mgr.scene,
+                  new Uint8Array(buffer),
+                  setLoadingState,
+                );
+              } finally {
+                setLoadingState(null);
+              }
+            };
+            input.click();
+          }}
+        >
+          Load IFC Model
+        </button>
         <select
           className={styles.envSelect}
           onChange={(e) => {
@@ -176,6 +204,30 @@ export function ScenePage() {
               {bg.label}
             </option>
           ))}
+        </select>
+        <label className={styles.ssaoLabel}>
+          <input
+            type="checkbox"
+            onChange={(e) =>
+              sceneManagerRef.current?.setSsaoEnabled(e.target.checked)
+            }
+          />
+          SSAO
+        </label>
+        <select
+          className={styles.envSelect}
+          defaultValue={String(window.devicePixelRatio)}
+          onChange={(e) => {
+            const engine = sceneManagerRef.current?.scene.getEngine();
+            if (engine) {
+              engine.setHardwareScalingLevel(1 / Number(e.target.value));
+            }
+          }}
+        >
+          <option value="1">1x</option>
+          <option value={String(window.devicePixelRatio)}>
+            {window.devicePixelRatio}x (Retina)
+          </option>
         </select>
       </div>
       <SceneComponent
