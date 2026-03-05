@@ -253,13 +253,17 @@ function createMeshFromGeometry(
 
   if (vRaw.length === 0) return null;
 
-  // De-interleave: 6 floats per vertex [x, y, z, nx, ny, nz]
-  // Negate Z to convert from right-handed Y-up (web-ifc) to left-handed Y-up (Babylon.js)
-  const vertexCount = vRaw.length / 6;
+  // web-ifc uses 6 floats [x,y,z,nx,ny,nz] or 8 floats [x,y,z,nx,ny,nz,u,v] per vertex
+  const stride = vRaw.length % 8 === 0 && vRaw.length % 6 !== 0 ? 8 : 6;
+  const hasUVs = stride === 8;
+  const vertexCount = vRaw.length / stride;
+
+  // De-interleave and negate Z (right-handed Y-up → left-handed Y-up)
   const positions = new Float32Array(vertexCount * 3);
   const normals = new Float32Array(vertexCount * 3);
+  const uvs = hasUVs ? new Float32Array(vertexCount * 2) : null;
   for (let i = 0; i < vertexCount; i++) {
-    const s = i * 6;
+    const s = i * stride;
     const d = i * 3;
     positions[d] = vRaw[s];
     positions[d + 1] = vRaw[s + 1];
@@ -267,6 +271,11 @@ function createMeshFromGeometry(
     normals[d] = vRaw[s + 3];
     normals[d + 1] = vRaw[s + 4];
     normals[d + 2] = -vRaw[s + 5];
+    if (uvs) {
+      const uv = i * 2;
+      uvs[uv] = vRaw[s + 6];
+      uvs[uv + 1] = vRaw[s + 7];
+    }
   }
 
   // Z-negation reverses winding; flip each triangle to restore correct face orientation
@@ -281,6 +290,7 @@ function createMeshFromGeometry(
   vertexData.positions = positions;
   vertexData.normals = normals;
   vertexData.indices = indices;
+  if (uvs) vertexData.uvs = uvs;
   vertexData.applyToMesh(mesh);
 
   return mesh;
@@ -567,6 +577,7 @@ export async function loadIfcModel(
 function bakeThinInstances(mesh: Mesh): VertexData {
   const basePositions = mesh.getVerticesData(VertexBuffer.PositionKind)!;
   const baseNormals = mesh.getVerticesData(VertexBuffer.NormalKind)!;
+  const baseUVs = mesh.getVerticesData(VertexBuffer.UVKind);
   const baseIndices = mesh.getIndices()!;
   const instanceCount = mesh.thinInstanceCount;
 
@@ -580,6 +591,7 @@ function bakeThinInstances(mesh: Mesh): VertexData {
     const vd = new VertexData();
     vd.positions = new Float32Array(basePositions);
     vd.normals = new Float32Array(baseNormals);
+    if (baseUVs) vd.uvs = new Float32Array(baseUVs);
     vd.indices = new Int32Array(baseIndices);
     return vd;
   }
@@ -589,6 +601,7 @@ function bakeThinInstances(mesh: Mesh): VertexData {
 
   const allPositions = new Float32Array(vertexCount * 3 * instanceCount);
   const allNormals = new Float32Array(vertexCount * 3 * instanceCount);
+  const allUVs = baseUVs ? new Float32Array(vertexCount * 2 * instanceCount) : null;
   const allIndices = new Int32Array(indexCount * instanceCount);
 
   const tmpPos = new Vector3();
@@ -597,6 +610,7 @@ function bakeThinInstances(mesh: Mesh): VertexData {
   for (let inst = 0; inst < instanceCount; inst++) {
     const matrix = Matrix.FromArray(matrixBuffer, inst * 16);
     const posOffset = inst * vertexCount * 3;
+    const uvOffset = inst * vertexCount * 2;
     const idxOffset = inst * indexCount;
     const vertOffset = inst * vertexCount;
 
@@ -621,6 +635,11 @@ function bakeThinInstances(mesh: Mesh): VertexData {
       allNormals[posOffset + s + 2] = tmpNorm.z;
     }
 
+    // Copy UVs (texture coordinates are instance-independent)
+    if (allUVs && baseUVs) {
+      allUVs.set(baseUVs, uvOffset);
+    }
+
     // Offset indices
     for (let i = 0; i < indexCount; i++) {
       allIndices[idxOffset + i] = baseIndices[i] + vertOffset;
@@ -630,6 +649,7 @@ function bakeThinInstances(mesh: Mesh): VertexData {
   const vd = new VertexData();
   vd.positions = allPositions;
   vd.normals = allNormals;
+  if (allUVs) vd.uvs = allUVs;
   vd.indices = allIndices;
   return vd;
 }
