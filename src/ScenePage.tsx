@@ -6,50 +6,51 @@ import {
   Mesh,
   Scene,
 } from "@babylonjs/core";
-import { SceneComponent } from "./SceneComponent"; // uses above component in same directory
+import { SceneComponent } from "./SceneComponent";
 import "./App.css";
-import { loadIfcModel } from "./ifc-loader";
+import { loadIfcModel, type LoadedModel } from "./ifc-loader";
 import { useRef } from "react";
 
 class SceneManager {
   camera: FreeCamera;
-  displayMesh: Mesh;
+  displayMesh: Mesh | null;
+  ground: Mesh | null;
 
-  constructor(private scene: Scene) {
-    // This creates and positions a free camera (non-mesh)
-    this.camera = new FreeCamera("camera1", new Vector3(0, 5, -10), this.scene);
-
-    // This targets the camera to scene origin
+  constructor(public readonly scene: Scene) {
+    this.camera = new FreeCamera("camera1", new Vector3(0, 5, -10), scene);
     this.camera.setTarget(Vector3.Zero());
 
     const canvas = scene.getEngine().getRenderingCanvas();
-
-    // This attaches the camera to the canvas
     this.camera.attachControl(canvas, true);
 
-    // This creates a light, aiming 0,1,0 - to the sky (non-mesh)
     const light = new HemisphericLight(
       "light",
       new Vector3(0, 1, 0),
       this.scene,
     );
-
-    // Default intensity is 1. Let's dim the light a small amount
     light.intensity = 0.7;
 
-    // Our built-in 'box' shape.
     this.displayMesh = MeshBuilder.CreateBox("box", { size: 2 }, this.scene);
-
-    // Move the box upward 1/2 its height
     this.displayMesh.position.y = 1;
 
-    // Our built-in 'ground' shape.
-    MeshBuilder.CreateGround("ground", { width: 6, height: 6 }, this.scene);
+    this.ground = MeshBuilder.CreateGround(
+      "ground",
+      { width: 6, height: 6 },
+      this.scene,
+    );
+  }
+
+  clearPlaceholder() {
+    this.displayMesh?.dispose();
+    this.displayMesh = null;
+    this.ground?.dispose();
+    this.ground = null;
   }
 
   onRender() {
-    const deltaTimeInMillis = this.scene.getEngine().getDeltaTime();
+    if (!this.displayMesh) return;
 
+    const deltaTimeInMillis = this.scene.getEngine().getDeltaTime();
     const rpm = 10;
     this.displayMesh.rotation.y +=
       (rpm / 60) * Math.PI * 2 * (deltaTimeInMillis / 1000);
@@ -57,14 +58,15 @@ class SceneManager {
 }
 
 export function ScenePage() {
-  const sceneMangerRef = useRef<SceneManager | null>(null);
+  const sceneManagerRef = useRef<SceneManager | null>(null);
+  const loadedModelRef = useRef<LoadedModel | null>(null);
 
   const onSceneReady = (scene: Scene) => {
-    sceneMangerRef.current = new SceneManager(scene);
+    sceneManagerRef.current = new SceneManager(scene);
   };
 
   const onRender = () => {
-    sceneMangerRef.current?.onRender();
+    sceneManagerRef.current?.onRender();
   };
 
   return (
@@ -72,14 +74,31 @@ export function ScenePage() {
       <button
         style={{ position: "fixed", top: 16, left: 16, zIndex: 1 }}
         onClick={() => {
+          const mgr = sceneManagerRef.current;
+          if (!mgr) {
+            console.error(
+              "SceneManager not initialized yet -- cannot load IFC model",
+            );
+            return;
+          }
           const input = document.createElement("input");
           input.type = "file";
           input.accept = ".ifc";
           input.onchange = async () => {
             const file = input.files?.[0];
             if (!file) return;
+
+            // Dispose previous IFC model if any
+            loadedModelRef.current?.dispose();
+
+            // Remove placeholder geometry
+            mgr.clearPlaceholder();
+
             const buffer = await file.arrayBuffer();
-            loadIfcModel(new Uint8Array(buffer));
+            loadedModelRef.current = await loadIfcModel(
+              mgr.scene,
+              new Uint8Array(buffer),
+            );
           };
           input.click();
         }}
