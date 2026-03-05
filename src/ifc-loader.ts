@@ -481,9 +481,33 @@ export async function loadIfcModel(
     mat.freeze();
   }
 
-  // All instances added — make meshes visible and freeze transforms
+  // All instances added — apply volume-based occlusion filtering.
+  // We use the BASE geometry bounding box (single instance, local space) rather
+  // than the world-space bounds of all instances — otherwise a small fitting
+  // instanced across the building gets a huge bounding box and passes the filter.
+  const MIN_OCCLUSION_VOLUME = 2.0; // cubic units (meters in most IFC files)
+  let occlusionEnabledCount = 0;
+
   for (const entry of allEntries) {
     entry.mesh.setEnabled(true);
+
+    if (entry.originalOcclusionType !== AbstractMesh.OCCLUSION_TYPE_NONE) {
+      // Use local-space bounding info (base geometry only, ignoring thin instances)
+      const bb = entry.mesh.getBoundingInfo().boundingBox;
+      const extent = bb.maximum.subtract(bb.minimum); // local space, not World
+      const volume = Math.abs(extent.x * extent.y * extent.z);
+
+      if (volume >= MIN_OCCLUSION_VOLUME) {
+        occlusionEnabledCount++;
+      } else {
+        // Too small to benefit from occlusion queries
+        entry.mesh.occlusionType = AbstractMesh.OCCLUSION_TYPE_NONE;
+        entry.originalOcclusionType = AbstractMesh.OCCLUSION_TYPE_NONE;
+      }
+    }
+
+    // Now refresh with thin instances for proper frustum culling, then freeze
+    entry.mesh.refreshBoundingInfo(true);
     entry.mesh.freezeWorldMatrix();
     entry.mesh.doNotSyncBoundingInfo = true;
   }
@@ -491,7 +515,8 @@ export async function loadIfcModel(
   ifcAPI.CloseModel(modelId);
 
   console.log(
-    `IFC model loaded: ${allEntries.length} unique meshes, ${totalElements} elements`,
+    `IFC model loaded: ${allEntries.length} unique meshes, ${totalElements} elements, ` +
+      `${occlusionEnabledCount} with occlusion queries (volume >= ${MIN_OCCLUSION_VOLUME})`,
   );
 
   return {
@@ -523,8 +548,9 @@ function bakeThinInstances(mesh: Mesh): VertexData {
   const instanceCount = mesh.thinInstanceCount;
 
   // Read the raw matrix buffer (16 floats per instance, column-major)
-  const matrixBuffer =
-    mesh._thinInstanceDataStorage?.matrixData as Float32Array | undefined;
+  const matrixBuffer = mesh._thinInstanceDataStorage?.matrixData as
+    | Float32Array
+    | undefined;
 
   // If there are no thin instances or no matrix data, return the base geometry as-is
   if (!matrixBuffer || instanceCount <= 0) {
@@ -687,9 +713,13 @@ export function mergeLoadedModel(
     }
   }
 
+  const occlusionCount = newEntries.filter(
+    (e) => e.originalOcclusionType !== AbstractMesh.OCCLUSION_TYPE_NONE,
+  ).length;
+
   console.log(
     `Mesh merge complete: ${model.entries.length} → ${newEntries.length} meshes ` +
-      `(merged ${mergedCount}, kept ${keptCount})`,
+      `(merged ${mergedCount}, kept ${keptCount}, ${occlusionCount} with occlusion queries)`,
   );
 
   return {
