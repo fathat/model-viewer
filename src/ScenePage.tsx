@@ -8,6 +8,7 @@ import {
 } from "@babylonjs/core";
 import { SceneComponent } from "./SceneComponent"; // uses above component in same directory
 // import SceneComponent from 'babylonjs-hook'; // if you install 'babylonjs-hook' NPM.
+import { useRef } from "react";
 import "./App.css";
 import { loadIfcModel } from "./ifc-loader";
 
@@ -54,11 +55,25 @@ const onRender = (scene: Scene) => {
 };
 
 export function ScenePage() {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   return (
     <>
+      <input
+        type="file"
+        accept=".ifc"
+        style={{ display: "none" }}
+        ref={(el) => { fileInputRef.current = el; }}
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const buffer = await file.arrayBuffer();
+          loadIfcModel(new Uint8Array(buffer));
+          e.target.value = "";
+        }}
+      />
       <button
         style={{ position: "fixed", top: 16, left: 16, zIndex: 1 }}
-        onClick={() => loadIfcModel(new Uint8Array())}
+        onClick={() => fileInputRef.current?.click()}
       >
         Load IFC Model
       </button>
