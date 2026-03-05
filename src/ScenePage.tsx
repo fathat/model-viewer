@@ -18,7 +18,9 @@ import {
 import { SceneComponent } from "./SceneComponent";
 import "./App.css";
 import styles from "./ScenePage.module.css";
-import { loadIfcModel, mergeLoadedModel, type LoadedModel, type IfcCategoryInfo } from "./ifc-loader";
+import { loadIfcModel, mergeLoadedModel, type IfcCategoryInfo } from "./ifc-loader";
+import { loadGltfModel } from "./gltf-loader";
+import type { LoadedModel } from "./model-types";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface IfcCategoryState extends IfcCategoryInfo {
@@ -315,7 +317,7 @@ export function ScenePage() {
     const model = loadedModelRef.current;
     if (!model) return;
     for (const entry of model.entries) {
-      if (entry.meta.ifcTypeLabel === label) {
+      if (entry.meta?.ifcTypeLabel === label) {
         entry.mesh.setEnabled(visible);
       }
     }
@@ -342,18 +344,21 @@ export function ScenePage() {
             const mgr = sceneManagerRef.current;
             if (!mgr) {
               console.error(
-                "SceneManager not initialized yet -- cannot load IFC model",
+                "SceneManager not initialized yet -- cannot load model",
               );
               return;
             }
             const input = document.createElement("input");
             input.type = "file";
-            input.accept = ".ifc";
+            input.accept = ".ifc,.gltf,.glb";
             input.onchange = async () => {
               const file = input.files?.[0];
               if (!file) return;
 
-              // Dispose previous IFC model if any
+              const ext = file.name.split(".").pop()?.toLowerCase();
+              const isGltf = ext === "gltf" || ext === "glb";
+
+              // Dispose previous model if any
               loadedModelRef.current?.dispose();
 
               // Remove placeholder geometry
@@ -361,24 +366,35 @@ export function ScenePage() {
 
               setLoadingState("extracting");
               try {
-                const buffer = await file.arrayBuffer();
-                const rawModel = await loadIfcModel(
-                  mgr.scene,
-                  new Uint8Array(buffer),
-                  setLoadingState,
-                  (cats) =>
-                    setIfcCategories((prev) =>
-                      cats.map((c) => ({
-                        ...c,
-                        visible:
-                          prev.find((p) => p.label === c.label)?.visible ??
-                          true,
-                      })),
-                    ),
-                );
-                const model = mergeLoadedModel(rawModel, mgr.scene);
-                loadedModelRef.current = model;
-                mgr.loadedModel = model;
+                if (isGltf) {
+                  setIfcCategories([]);
+                  const model = await loadGltfModel(
+                    mgr.scene,
+                    file,
+                    setLoadingState,
+                  );
+                  loadedModelRef.current = model;
+                  mgr.loadedModel = model;
+                } else {
+                  const buffer = await file.arrayBuffer();
+                  const rawModel = await loadIfcModel(
+                    mgr.scene,
+                    new Uint8Array(buffer),
+                    setLoadingState,
+                    (cats) =>
+                      setIfcCategories((prev) =>
+                        cats.map((c) => ({
+                          ...c,
+                          visible:
+                            prev.find((p) => p.label === c.label)?.visible ??
+                            true,
+                        })),
+                      ),
+                  );
+                  const model = mergeLoadedModel(rawModel, mgr.scene);
+                  loadedModelRef.current = model;
+                  mgr.loadedModel = model;
+                }
                 mgr.frameBoundingBox();
               } finally {
                 setLoadingState(null);
@@ -387,7 +403,7 @@ export function ScenePage() {
             input.click();
           }}
         >
-          Load IFC Model
+          Load Model
         </button>
         <select
           className={styles.envSelect}

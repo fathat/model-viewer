@@ -153,25 +153,8 @@ const IFC_TYPE_CONFIGS: IfcTypeConfig[] = [
 // Custom mesh wrapper types
 // ---------------------------------------------------------------------------
 
-export interface IfcElementMeta {
-  ifcType: number;
-  ifcTypeLabel: string;
-  priority: 1 | 2 | 3;
-}
-
-export interface IfcMeshEntry {
-  mesh: Mesh;
-  meta: IfcElementMeta;
-  /** Express IDs of IFC elements that contributed thin instances to this mesh */
-  expressIDs: number[];
-  /** The occlusion type assigned at load time, used to restore after toggling */
-  originalOcclusionType: number;
-}
-
-export interface LoadedModel {
-  entries: IfcMeshEntry[];
-  dispose(): void;
-}
+import type { MeshEntry, LoadedModel } from "./model-types";
+export type { LoadedModel } from "./model-types";
 
 export interface IfcCategoryInfo {
   label: string;
@@ -306,9 +289,9 @@ function processFlatMesh(
   config: IfcTypeConfig,
   modelId: number,
   scene: Scene,
-  meshCache: Map<string, { mesh: Mesh; entry: IfcMeshEntry }>,
+  meshCache: Map<string, { mesh: Mesh; entry: MeshEntry }>,
   materialCache: Map<string, PBRMetallicRoughnessMaterial>,
-  allEntries: IfcMeshEntry[],
+  allEntries: MeshEntry[],
 ): { nCached: number; nCreated: number } {
   let nCached = 0;
   let nCreated = 0;
@@ -338,7 +321,7 @@ function processFlatMesh(
           ? AbstractMesh.OCCLUSION_TYPE_OPTIMISTIC
           : AbstractMesh.OCCLUSION_TYPE_NONE;
 
-      const entry: IfcMeshEntry = {
+      const entry: MeshEntry = {
         mesh,
         meta: {
           ifcType: config.typeCode,
@@ -352,8 +335,8 @@ function processFlatMesh(
       meshCache.set(cacheKey, cached);
       allEntries.push(entry);
     } else {
-      if (!cached.entry.expressIDs.includes(flatMesh.expressID)) {
-        cached.entry.expressIDs.push(flatMesh.expressID);
+      if (!cached.entry.expressIDs!.includes(flatMesh.expressID)) {
+        cached.entry.expressIDs!.push(flatMesh.expressID);
 
         nCached++;
       }
@@ -437,9 +420,9 @@ export async function loadIfcModel(
   // Block material dirty checks during bulk mesh creation — we'll reconcile once at the end.
   scene.blockMaterialDirtyMechanism = true;
 
-  const meshCache = new Map<string, { mesh: Mesh; entry: IfcMeshEntry }>();
+  const meshCache = new Map<string, { mesh: Mesh; entry: MeshEntry }>();
   const materialCache = new Map<string, PBRMetallicRoughnessMaterial>();
-  const allEntries: IfcMeshEntry[] = [];
+  const allEntries: MeshEntry[] = [];
 
   // Track category counts progressively for the UI
   const categoryCounts = new Map<
@@ -475,7 +458,7 @@ export async function loadIfcModel(
 
     // Update category counts for any newly created entries
     for (let e = entriesBefore; e < allEntries.length; e++) {
-      const meta = allEntries[e].meta;
+      const meta = allEntries[e].meta!;
       const existing = categoryCounts.get(meta.ifcTypeLabel);
       if (existing) {
         existing.count++;
@@ -669,12 +652,12 @@ export function mergeLoadedModel(
   // Group entries by material + category
   const groups = new Map<
     string,
-    { toMerge: IfcMeshEntry[]; toKeep: IfcMeshEntry[] }
+    { toMerge: MeshEntry[]; toKeep: MeshEntry[] }
   >();
 
   for (const entry of model.entries) {
     const matId = entry.mesh.material?.uniqueId ?? 0;
-    const groupKey = `${matId}|${entry.meta.ifcTypeLabel}`;
+    const groupKey = `${matId}|${entry.meta?.ifcTypeLabel ?? ""}`;
     let group = groups.get(groupKey);
     if (!group) {
       group = { toMerge: [], toKeep: [] };
@@ -688,7 +671,7 @@ export function mergeLoadedModel(
     }
   }
 
-  const newEntries: IfcMeshEntry[] = [];
+  const newEntries: MeshEntry[] = [];
   let mergedCount = 0;
   let keptCount = 0;
 
@@ -724,7 +707,7 @@ export function mergeLoadedModel(
       vd.applyToMesh(baked);
       baked.material = sharedMaterial;
       bakedMeshes.push(baked);
-      allExpressIDs.push(...entry.expressIDs);
+      allExpressIDs.push(...(entry.expressIDs ?? []));
 
       // Dispose the original thin-instance mesh
       entry.mesh.dispose(false, false);
@@ -748,7 +731,7 @@ export function mergeLoadedModel(
 
       newEntries.push({
         mesh: merged,
-        meta: { ...representativeEntry.meta },
+        meta: representativeEntry.meta ? { ...representativeEntry.meta } : undefined,
         expressIDs: allExpressIDs,
         originalOcclusionType: AbstractMesh.OCCLUSION_TYPE_NONE,
       });
