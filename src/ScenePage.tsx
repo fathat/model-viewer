@@ -296,6 +296,7 @@ export function ScenePage() {
   const [loadingState, setLoadingState] = useState<
     null | "extracting" | number
   >(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [ifcCategories, setIfcCategories] = useState<IfcCategoryState[]>([]);
 
   const [stats, setStats] = useState<{
@@ -380,6 +381,7 @@ export function ScenePage() {
               mgr.clearPlaceholder();
 
               setLoadingState("extracting");
+              setLoadError(null);
               try {
                 if (isGltf) {
                   setIfcCategories([]);
@@ -411,6 +413,11 @@ export function ScenePage() {
                   mgr.loadedModel = model;
                 }
                 mgr.frameBoundingBox();
+              } catch (err) {
+                const msg =
+                  err instanceof Error ? err.message : String(err);
+                console.error("Failed to load model:", err);
+                setLoadError(msg);
               } finally {
                 setLoadingState(null);
               }
@@ -493,6 +500,15 @@ export function ScenePage() {
       >
         Loading… {typeof loadingState === "number" ? loadingState : 0}%
       </div>
+      {loadError && (
+        <div
+          className={styles.errorPill}
+          title="Click to dismiss"
+          onClick={() => setLoadError(null)}
+        >
+          Failed to load model: {loadError}
+        </div>
+      )}
       {ifcCategories.length > 0 && (
         <div className={styles.filterPanel}>
           <div className={styles.filterHeader}>Categories</div>
