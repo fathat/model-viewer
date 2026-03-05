@@ -1,8 +1,15 @@
-.loadButton {
+.toolbar {
   position: fixed;
   top: 16px;
   left: 16px;
   z-index: 1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.envSelect {
+  padding: 4px 8px;
 }
 
 .overlay {

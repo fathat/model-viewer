@@ -4,7 +4,7 @@ import {
   Mesh,
   VertexData,
   Matrix,
-  StandardMaterial,
+  PBRMetallicRoughnessMaterial,
   Color3,
 } from "@babylonjs/core";
 import * as WEBIFC from "web-ifc";
@@ -168,18 +168,20 @@ function colorKey(c: { x: number; y: number; z: number; w: number }): string {
 function getOrCreateMaterial(
   scene: Scene,
   color: { x: number; y: number; z: number; w: number },
-  cache: Map<string, StandardMaterial>,
-): StandardMaterial {
+  cache: Map<string, PBRMetallicRoughnessMaterial>,
+): PBRMetallicRoughnessMaterial {
   const key = colorKey(color);
   let mat = cache.get(key);
   if (mat) return mat;
 
-  mat = new StandardMaterial(`ifc-mat-${key}`, scene);
-  mat.diffuseColor = new Color3(color.x, color.y, color.z);
+  mat = new PBRMetallicRoughnessMaterial(`ifc-mat-${key}`, scene);
+  mat.baseColor = new Color3(color.x, color.y, color.z);
+  mat.metallic = 0;
+  mat.roughness = 1;
   mat.backFaceCulling = false;
   if (color.w < 1) {
     mat.alpha = color.w;
-    mat.transparencyMode = StandardMaterial.MATERIAL_ALPHABLEND;
+    mat.transparencyMode = PBRMetallicRoughnessMaterial.MATERIAL_ALPHABLEND;
   }
   cache.set(key, mat);
   return mat;
@@ -241,7 +243,7 @@ function processFlatMesh(
   modelId: number,
   scene: Scene,
   meshCache: Map<string, { mesh: Mesh; entry: IfcMeshEntry }>,
-  materialCache: Map<string, StandardMaterial>,
+  materialCache: Map<string, PBRMetallicRoughnessMaterial>,
   allEntries: IfcMeshEntry[],
 ): { nCached: number; nCreated: number } {
   let nCached = 0;
@@ -354,7 +356,7 @@ export async function loadIfcModel(
   // ---- Process collected elements (already in priority order) ----
 
   const meshCache = new Map<string, { mesh: Mesh; entry: IfcMeshEntry }>();
-  const materialCache = new Map<string, StandardMaterial>();
+  const materialCache = new Map<string, PBRMetallicRoughnessMaterial>();
   const allEntries: IfcMeshEntry[] = [];
 
   for (let i = 0; i < totalElements; i++) {
