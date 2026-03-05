@@ -8,6 +8,7 @@ import {
 } from "@babylonjs/core";
 import { SceneComponent } from "./SceneComponent";
 import "./App.css";
+import styles from "./ScenePage.module.css";
 import { loadIfcModel, type LoadedModel } from "./ifc-loader";
 import { useRef, useState } from "react";
 
@@ -60,7 +61,9 @@ class SceneManager {
 export function ScenePage() {
   const sceneManagerRef = useRef<SceneManager | null>(null);
   const loadedModelRef = useRef<LoadedModel | null>(null);
-  const [loadingPct, setLoadingPct] = useState<number | null>(null);
+  const [loadingState, setLoadingState] = useState<
+    null | "extracting" | number
+  >(null);
 
   const onSceneReady = (scene: Scene) => {
     sceneManagerRef.current = new SceneManager(scene);
@@ -73,7 +76,7 @@ export function ScenePage() {
   return (
     <>
       <button
-        style={{ position: "fixed", top: 16, left: 16, zIndex: 1 }}
+        className={styles.loadButton}
         onClick={() => {
           const mgr = sceneManagerRef.current;
           if (!mgr) {
@@ -95,16 +98,16 @@ export function ScenePage() {
             // Remove placeholder geometry
             mgr.clearPlaceholder();
 
-            setLoadingPct(0);
+            setLoadingState("extracting");
             try {
               const buffer = await file.arrayBuffer();
               loadedModelRef.current = await loadIfcModel(
                 mgr.scene,
                 new Uint8Array(buffer),
-                setLoadingPct,
+                setLoadingState,
               );
             } finally {
-              setLoadingPct(null);
+              setLoadingState(null);
             }
           };
           input.click();
@@ -117,23 +120,16 @@ export function ScenePage() {
         onSceneReady={onSceneReady}
         onRender={onRender}
       />
-      {loadingPct !== null && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            color: "white",
-            fontSize: 24,
-            zIndex: 2,
-          }}
-        >
-          Loading… {loadingPct}%
-        </div>
-      )}
+      <div
+        className={`${styles.overlay} ${loadingState === "extracting" ? styles.visible : ""}`}
+      >
+        Loading…
+      </div>
+      <div
+        className={`${styles.progressPill} ${typeof loadingState === "number" ? styles.visible : ""}`}
+      >
+        Loading… {typeof loadingState === "number" ? loadingState : 0}%
+      </div>
     </>
   );
 }

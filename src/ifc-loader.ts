@@ -141,7 +141,7 @@ export async function loadIfcModel(
         mesh = created;
 
         mesh.material = getOrCreateMaterial(scene, pg.color, materialCache);
-        mesh.setEnabled(false); // Hide until all instances are added
+        //mesh.setEnabled(false); // Hide until all instances are added
         meshCache.set(cacheKey, mesh);
         allMeshes.push(mesh);
       } else {
