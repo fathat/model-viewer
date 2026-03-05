@@ -148,6 +148,12 @@ export interface LoadedModel {
   dispose(): void;
 }
 
+export interface IfcCategoryInfo {
+  label: string;
+  priority: 1 | 2 | 3;
+  count: number;
+}
+
 // ---------------------------------------------------------------------------
 // Collected element reference (lightweight — just IDs and config, no geometry)
 // ---------------------------------------------------------------------------
@@ -306,6 +312,7 @@ export async function loadIfcModel(
   scene: Scene,
   data: Uint8Array,
   onProgress?: (pct: number) => void,
+  onCategories?: (categories: IfcCategoryInfo[]) => void,
 ): Promise<LoadedModel> {
   if (!loaderInitialized) {
     await ifcAPI.Init();
@@ -359,10 +366,28 @@ export async function loadIfcModel(
   const materialCache = new Map<string, PBRMetallicRoughnessMaterial>();
   const allEntries: IfcMeshEntry[] = [];
 
+  // Track category counts progressively for the UI
+  const categoryCounts = new Map<
+    string,
+    { priority: 1 | 2 | 3; count: number }
+  >();
+  let categoriesDirty = false;
+
+  function emitCategories() {
+    if (!categoriesDirty || !onCategories) return;
+    categoriesDirty = false;
+    const cats: IfcCategoryInfo[] = Array.from(
+      categoryCounts,
+      ([label, { priority, count }]) => ({ label, priority, count }),
+    ).sort((a, b) => a.priority - b.priority || a.label.localeCompare(b.label));
+    onCategories(cats);
+  }
+
   for (let i = 0; i < totalElements; i++) {
     const element = collected[i];
     const flatMesh = ifcAPI.GetFlatMesh(modelId, element.expressID);
 
+    const entriesBefore = allEntries.length;
     const { nCreated } = processFlatMesh(
       flatMesh,
       element.config,
@@ -373,6 +398,21 @@ export async function loadIfcModel(
       allEntries,
     );
 
+    // Update category counts for any newly created entries
+    for (let e = entriesBefore; e < allEntries.length; e++) {
+      const meta = allEntries[e].meta;
+      const existing = categoryCounts.get(meta.ifcTypeLabel);
+      if (existing) {
+        existing.count++;
+      } else {
+        categoryCounts.set(meta.ifcTypeLabel, {
+          priority: meta.priority,
+          count: 1,
+        });
+      }
+      categoriesDirty = true;
+    }
+
     if (flatMesh.delete) flatMesh.delete();
 
     // Report progress and yield to the browser periodically so the UI can update
@@ -380,11 +420,15 @@ export async function loadIfcModel(
     onProgress?.(pct);
 
     if (i % 20 === 0 && nCreated > 0) {
+      emitCategories();
       // Only do a setTimeout if we actually created new meshes. If we're just adding
       // thin instances to existing meshes, we can do that in a tight loop without yielding.
       await new Promise((r) => setTimeout(r, 0));
     }
   }
+
+  // Final emit to capture any remaining updates
+  emitCategories();
 
   // All instances added — make meshes visible
   for (const entry of allEntries) {

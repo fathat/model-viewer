@@ -14,8 +14,12 @@ import {
 import { SceneComponent } from "./SceneComponent";
 import "./App.css";
 import styles from "./ScenePage.module.css";
-import { loadIfcModel, type LoadedModel } from "./ifc-loader";
-import { useRef, useState } from "react";
+import { loadIfcModel, type LoadedModel, type IfcCategoryInfo } from "./ifc-loader";
+import { useCallback, useRef, useState } from "react";
+
+interface IfcCategoryState extends IfcCategoryInfo {
+  visible: boolean;
+}
 
 import grasslandsSunsetUrl from "./assets/backgrounds/grasslands_sunset_2k.hdr?url";
 import rosendalPlainsUrl from "./assets/backgrounds/rosendal_plains_2_2k.hdr?url";
@@ -140,6 +144,20 @@ export function ScenePage() {
   const [loadingState, setLoadingState] = useState<
     null | "extracting" | number
   >(null);
+  const [ifcCategories, setIfcCategories] = useState<IfcCategoryState[]>([]);
+
+  const toggleCategory = useCallback((label: string, visible: boolean) => {
+    const model = loadedModelRef.current;
+    if (!model) return;
+    for (const entry of model.entries) {
+      if (entry.meta.ifcTypeLabel === label) {
+        entry.mesh.setEnabled(visible);
+      }
+    }
+    setIfcCategories((prev) =>
+      prev.map((c) => (c.label === label ? { ...c, visible } : c)),
+    );
+  }, []);
 
   const onSceneReady = (scene: Scene) => {
     sceneManagerRef.current = new SceneManager(scene);
@@ -178,11 +196,21 @@ export function ScenePage() {
               setLoadingState("extracting");
               try {
                 const buffer = await file.arrayBuffer();
-                loadedModelRef.current = await loadIfcModel(
+                const model = await loadIfcModel(
                   mgr.scene,
                   new Uint8Array(buffer),
                   setLoadingState,
+                  (cats) =>
+                    setIfcCategories((prev) =>
+                      cats.map((c) => ({
+                        ...c,
+                        visible:
+                          prev.find((p) => p.label === c.label)?.visible ??
+                          true,
+                      })),
+                    ),
                 );
+                loadedModelRef.current = model;
               } finally {
                 setLoadingState(null);
               }
@@ -245,6 +273,21 @@ export function ScenePage() {
       >
         Loading… {typeof loadingState === "number" ? loadingState : 0}%
       </div>
+      {ifcCategories.length > 0 && (
+        <div className={styles.filterPanel}>
+          <div className={styles.filterHeader}>Categories</div>
+          {ifcCategories.map((cat) => (
+            <label key={cat.label} className={styles.filterItem}>
+              <input
+                type="checkbox"
+                checked={cat.visible}
+                onChange={(e) => toggleCategory(cat.label, e.target.checked)}
+              />
+              {cat.label} ({cat.count})
+            </label>
+          ))}
+        </div>
+      )}
     </>
   );
 }
