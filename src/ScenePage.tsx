@@ -131,11 +131,24 @@ class SceneManager {
       this.skybox =
         this.scene.createDefaultSkybox(hdrTexture, true, 10000) ?? null;
       this.light.setEnabled(false);
-      this.scene.autoClearDepthAndStencil = false;
+      this._hasEnvironment = true;
     } else {
       this.light.setEnabled(true);
-      this.scene.autoClearDepthAndStencil = true;
+      this._hasEnvironment = false;
     }
+    this._updateAutoClear();
+  }
+
+  private _hasEnvironment = false;
+
+  /**
+   * Resolve autoClearDepthAndStencil based on environment and SSAO state.
+   * SSAO's pre-pass renderer requires a clean depth/stencil each frame, so
+   * we must keep clearing enabled whenever SSAO is active.
+   */
+  private _updateAutoClear() {
+    this.scene.autoClearDepthAndStencil =
+      this._ssaoEnabled || !this._hasEnvironment;
   }
 
   setSsaoEnabled(enabled: boolean) {
@@ -180,6 +193,8 @@ class SceneManager {
     for (const mat of this.scene.materials) {
       mat.freeze();
     }
+
+    this._updateAutoClear();
   }
 
   setOcclusionEnabled(enabled: boolean) {
