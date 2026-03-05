@@ -100,6 +100,7 @@ function createMeshFromGeometry(
 export async function loadIfcModel(
   scene: Scene,
   data: Uint8Array,
+  onProgress?: (pct: number) => void,
 ): Promise<LoadedModel> {
   if (!loaderInitialized) {
     await ifcAPI.Init();
@@ -111,13 +112,14 @@ export async function loadIfcModel(
 
   const modelId = ifcAPI.OpenModel(data);
   const flatMeshes = ifcAPI.LoadAllGeometry(modelId);
+  const totalElements = flatMeshes.size();
 
   // Cache key: "geoExpressID_colorKey" -> source Mesh (for thin instancing)
   const meshCache = new Map<string, Mesh>();
   const materialCache = new Map<string, StandardMaterial>();
   const allMeshes: Mesh[] = [];
 
-  for (let i = 0; i < flatMeshes.size(); i++) {
+  for (let i = 0; i < totalElements; i++) {
     const flatMesh = flatMeshes.get(i);
 
     for (let j = 0; j < flatMesh.geometries.size(); j++) {
@@ -139,6 +141,7 @@ export async function loadIfcModel(
         mesh = created;
 
         mesh.material = getOrCreateMaterial(scene, pg.color, materialCache);
+        mesh.setEnabled(false); // Hide until all instances are added
         meshCache.set(cacheKey, mesh);
         allMeshes.push(mesh);
       } else {
@@ -147,6 +150,18 @@ export async function loadIfcModel(
 
       mesh.thinInstanceAdd(transform);
     }
+
+    // Report progress and yield to the browser periodically so the UI can update
+    const pct = Math.round(((i + 1) / totalElements) * 100);
+    onProgress?.(pct);
+    if (i % 20 === 0) {
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  }
+
+  // All instances added — make meshes visible
+  for (const mesh of allMeshes) {
+    mesh.setEnabled(true);
   }
 
   ifcAPI.CloseModel(modelId);

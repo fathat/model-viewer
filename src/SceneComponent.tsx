@@ -26,6 +26,12 @@ export function SceneComponent({
   ...rest
 }: SceneComponentProps) {
   const reactCanvas = useRef(null);
+  const onRenderRef = useRef(onRender);
+  const onSceneReadyRef = useRef(onSceneReady);
+  useEffect(() => {
+    onRenderRef.current = onRender;
+    onSceneReadyRef.current = onSceneReady;
+  }, [onRender, onSceneReady]);
 
   // set up basic engine and scene
   useEffect(() => {
@@ -41,13 +47,15 @@ export function SceneComponent({
     );
     const scene = new Scene(engine, sceneOptions);
     if (scene.isReady()) {
-      onSceneReady(scene);
+      onSceneReadyRef.current(scene);
     } else {
-      scene.onReadyObservable.addOnce((scene) => onSceneReady(scene));
+      scene.onReadyObservable.addOnce((scene) =>
+        onSceneReadyRef.current(scene),
+      );
     }
 
     engine.runRenderLoop(() => {
-      if (typeof onRender === "function") onRender(scene);
+      onRenderRef.current(scene);
       scene.render();
     });
 
@@ -66,14 +74,7 @@ export function SceneComponent({
         window.removeEventListener("resize", resize);
       }
     };
-  }, [
-    antialias,
-    engineOptions,
-    adaptToDeviceRatio,
-    sceneOptions,
-    onRender,
-    onSceneReady,
-  ]);
+  }, [antialias, engineOptions, adaptToDeviceRatio, sceneOptions]);
 
   return <canvas className={styles.sceneCanvas} ref={reactCanvas} {...rest} />;
 }
