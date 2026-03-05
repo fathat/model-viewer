@@ -1,4 +1,5 @@
 import {
+  AbstractMesh,
   FreeCamera,
   Vector3,
   HemisphericLight,
@@ -140,6 +141,25 @@ class SceneManager {
     }
   }
 
+  setOcclusionEnabled(enabled: boolean) {
+    const model = this._loadedModel;
+    if (!model) return;
+    for (const entry of model.entries) {
+      entry.mesh.occlusionType = enabled
+        ? entry.originalOcclusionType
+        : AbstractMesh.OCCLUSION_TYPE_NONE;
+    }
+    this._occlusionEnabled = enabled;
+  }
+
+  /** Store a reference to the loaded model so occlusion can be toggled. */
+  set loadedModel(model: LoadedModel | null) {
+    this._loadedModel = model;
+  }
+
+  private _loadedModel: LoadedModel | null = null;
+  private _occlusionEnabled = true;
+
   clearPlaceholder() {
     this.displayMesh?.dispose();
     this.displayMesh = null;
@@ -261,6 +281,7 @@ export function ScenePage() {
                 );
                 const model = mergeLoadedModel(rawModel, mgr.scene);
                 loadedModelRef.current = model;
+                mgr.loadedModel = model;
               } finally {
                 setLoadingState(null);
               }
@@ -291,6 +312,16 @@ export function ScenePage() {
             }
           />
           SSAO
+        </label>
+        <label className={styles.ssaoLabel}>
+          <input
+            type="checkbox"
+            defaultChecked
+            onChange={(e) =>
+              sceneManagerRef.current?.setOcclusionEnabled(e.target.checked)
+            }
+          />
+          Occlusion
         </label>
         <select
           className={styles.envSelect}

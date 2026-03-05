@@ -164,6 +164,8 @@ export interface IfcMeshEntry {
   meta: IfcElementMeta;
   /** Express IDs of IFC elements that contributed thin instances to this mesh */
   expressIDs: number[];
+  /** The occlusion type assigned at load time, used to restore after toggling */
+  originalOcclusionType: number;
 }
 
 export interface LoadedModel {
@@ -311,6 +313,7 @@ function processFlatMesh(
           priority: config.priority,
         },
         expressIDs: [flatMesh.expressID],
+        originalOcclusionType: mesh.occlusionType,
       };
       cached = { mesh, entry };
       meshCache.set(cacheKey, cached);
@@ -678,6 +681,7 @@ export function mergeLoadedModel(
         mesh: merged,
         meta: { ...representativeEntry.meta },
         expressIDs: allExpressIDs,
+        originalOcclusionType: AbstractMesh.OCCLUSION_TYPE_NONE,
       });
       mergedCount += group.toMerge.length;
     }
