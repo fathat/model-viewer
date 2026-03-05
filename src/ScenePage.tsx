@@ -1,5 +1,6 @@
 import {
   AbstractMesh,
+  ArcRotateCamera,
   FreeCamera,
   Vector3,
   HemisphericLight,
@@ -8,6 +9,7 @@ import {
   Scene,
   HDRCubeTexture,
   type BaseTexture,
+  type Camera,
   PBRMetallicRoughnessMaterial,
   Color3,
   SSAO2RenderingPipeline,
@@ -34,22 +36,47 @@ const BACKGROUNDS: { label: string; url: string | null }[] = [
   { label: "Sunny Rose Garden", url: sunnyRoseGardenUrl },
 ];
 
+type CameraMode = "orbit" | "free";
+
 class SceneManager {
-  camera: FreeCamera;
+  orbitCamera: ArcRotateCamera;
+  freeCamera: FreeCamera;
   displayMesh: Mesh | null;
   ground: Mesh | null;
+  private _cameraMode: CameraMode = "orbit";
   private light: HemisphericLight;
   private envTexture: BaseTexture | null = null;
   private skybox: Mesh | null = null;
   private ssaoPipeline: SSAO2RenderingPipeline | null = null;
   readonly instrumentation: SceneInstrumentation;
 
-  constructor(public readonly scene: Scene) {
-    this.camera = new FreeCamera("camera1", new Vector3(0, 5, -10), scene);
-    this.camera.setTarget(Vector3.Zero());
+  get activeCamera(): Camera {
+    return this._cameraMode === "orbit" ? this.orbitCamera : this.freeCamera;
+  }
 
+  constructor(public readonly scene: Scene) {
     const canvas = scene.getEngine().getRenderingCanvas();
-    this.camera.attachControl(canvas, true);
+
+    // Orbit camera (default)
+    this.orbitCamera = new ArcRotateCamera(
+      "orbitCamera",
+      -Math.PI / 2,
+      Math.PI / 3,
+      20,
+      Vector3.Zero(),
+      scene,
+    );
+    this.orbitCamera.minZ = 0.1;
+    this.orbitCamera.wheelDeltaPercentage = 0.01;
+    this.orbitCamera.panningSensibility = 100;
+    this.orbitCamera.attachControl(canvas, true);
+
+    // Free camera (for interior navigation)
+    this.freeCamera = new FreeCamera("freeCamera", new Vector3(0, 5, -10), scene);
+    this.freeCamera.setTarget(Vector3.Zero());
+    this.freeCamera.minZ = 0.1;
+
+    scene.activeCamera = this.orbitCamera;
 
     this.light = new HemisphericLight(
       "light",
@@ -81,7 +108,6 @@ class SceneManager {
     this.ground.material = groundMat;
 
     scene.skipPointerMovePicking = true;
-    scene.enablePrePassRenderer();
 
     this.instrumentation = new SceneInstrumentation(scene);
     this.instrumentation.captureFrameTime = true;
@@ -111,12 +137,28 @@ class SceneManager {
   }
 
   setSsaoEnabled(enabled: boolean) {
+    this._ssaoEnabled = enabled;
+    this._applySsao();
+  }
+
+  private _ssaoEnabled = false;
+
+  /** Create or destroy the SSAO pipeline to match _ssaoEnabled + active camera. */
+  private _applySsao() {
     // Unfreeze materials so the pre-pass renderer can update shader defines
     for (const mat of this.scene.materials) {
       mat.unfreeze();
     }
 
-    if (enabled && !this.ssaoPipeline) {
+    // Fully tear down old pipeline + pre-pass renderer to avoid stale state
+    if (this.ssaoPipeline) {
+      this.ssaoPipeline.dispose();
+      this.ssaoPipeline = null;
+    }
+    this.scene.disablePrePassRenderer();
+
+    if (this._ssaoEnabled) {
+      this.scene.enablePrePassRenderer();
       const ssao = new SSAO2RenderingPipeline("ssao", this.scene, {
         ssaoRatio: 0.5,
         blurRatio: 1.0,
@@ -127,12 +169,9 @@ class SceneManager {
       ssao.expensiveBlur = true;
       this.scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline(
         "ssao",
-        this.camera,
+        this.activeCamera,
       );
       this.ssaoPipeline = ssao;
-    } else if (!enabled && this.ssaoPipeline) {
-      this.ssaoPipeline.dispose();
-      this.ssaoPipeline = null;
     }
 
     // Re-freeze materials after pipeline reconfiguration
@@ -158,7 +197,64 @@ class SceneManager {
   }
 
   private _loadedModel: LoadedModel | null = null;
+  // @ts-expect-error tracked for future use
   private _occlusionEnabled = true;
+
+  setCameraMode(mode: CameraMode) {
+    if (mode === this._cameraMode) return;
+    const canvas = this.scene.getEngine().getRenderingCanvas();
+
+    if (mode === "free") {
+      // Transfer orbit camera state → free camera
+      this.orbitCamera.detachControl();
+      this.freeCamera.position = this.orbitCamera.position.clone();
+      this.freeCamera.setTarget(this.orbitCamera.target.clone());
+      this.freeCamera.attachControl(canvas, true);
+      this.scene.activeCamera = this.freeCamera;
+    } else {
+      // Transfer free camera state → orbit camera
+      this.freeCamera.detachControl();
+      const forward = this.freeCamera.getForwardRay().direction;
+      const target = this.freeCamera.position.add(forward.scale(this.orbitCamera.radius));
+      this.orbitCamera.setTarget(target);
+      this.orbitCamera.setPosition(this.freeCamera.position.clone());
+      this.orbitCamera.attachControl(canvas, true);
+      this.scene.activeCamera = this.orbitCamera;
+    }
+
+    this._cameraMode = mode;
+
+    // Recreate SSAO pipeline for the new camera if it was enabled
+    if (this._ssaoEnabled) {
+      this._applySsao();
+    }
+  }
+
+  frameBoundingBox() {
+    let min = new Vector3(Infinity, Infinity, Infinity);
+    let max = new Vector3(-Infinity, -Infinity, -Infinity);
+    let found = false;
+
+    for (const mesh of this.scene.meshes) {
+      // Skip skybox, ground, and non-geometry meshes
+      if (!mesh.isEnabled() || mesh.name === "ground" || mesh.name === "hdrSkyBox") continue;
+      const bounds = mesh.getBoundingInfo().boundingBox;
+      min = Vector3.Minimize(min, bounds.minimumWorld);
+      max = Vector3.Maximize(max, bounds.maximumWorld);
+      found = true;
+    }
+
+    if (!found) return;
+
+    const center = Vector3.Center(min, max);
+    const extent = max.subtract(min);
+    const diagonal = extent.length();
+
+    this.orbitCamera.setTarget(center);
+    this.orbitCamera.radius = diagonal * 1.5;
+    this.orbitCamera.alpha = -Math.PI / 2;
+    this.orbitCamera.beta = Math.PI / 3;
+  }
 
   clearPlaceholder() {
     this.displayMesh?.dispose();
@@ -282,6 +378,7 @@ export function ScenePage() {
                 const model = mergeLoadedModel(rawModel, mgr.scene);
                 loadedModelRef.current = model;
                 mgr.loadedModel = model;
+                mgr.frameBoundingBox();
               } finally {
                 setLoadingState(null);
               }
@@ -291,6 +388,16 @@ export function ScenePage() {
         >
           Load IFC Model
         </button>
+        <select
+          className={styles.envSelect}
+          defaultValue="orbit"
+          onChange={(e) => {
+            sceneManagerRef.current?.setCameraMode(e.target.value as CameraMode);
+          }}
+        >
+          <option value="orbit">Orbit</option>
+          <option value="free">Free</option>
+        </select>
         <select
           className={styles.envSelect}
           onChange={(e) => {
