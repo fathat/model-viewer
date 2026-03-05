@@ -24,6 +24,14 @@ ifcAPI.SetWasmPath(wasmDir);
 
 let loaderInitialized = false;
 
+// Build a reverse lookup from numeric type codes to IFC type names (e.g. 2391406946 → "IFCWALL")
+const ifcTypeCodeToName = new Map<number, string>();
+for (const [name, value] of Object.entries(WEBIFC)) {
+  if (typeof value === "number" && name.startsWith("IFC")) {
+    ifcTypeCodeToName.set(value, name);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // IFC type configuration — priority and occlusion policy per element type
 // ---------------------------------------------------------------------------
@@ -123,6 +131,18 @@ const IFC_TYPE_CONFIGS: IfcTypeConfig[] = [
     priority: 3,
     occlusion: OcclusionPolicy.Enabled,
     label: "FurnishingElement",
+  },
+  {
+    typeCode: WEBIFC.IFCMEMBER,
+    priority: 3,
+    occlusion: OcclusionPolicy.Enabled,
+    label: "Member",
+  },
+  {
+    typeCode: WEBIFC.IFCBUILDINGELEMENTPROXY,
+    priority: 1,
+    occlusion: OcclusionPolicy.Disabled,
+    label: "BuildingElementProxy",
   },
 ];
 
@@ -352,10 +372,23 @@ export async function loadIfcModel(
     occlusion: OcclusionPolicy.Enabled,
     label: "Other",
   };
+  const loggedOtherTypes = new Set<number>();
   ifcAPI.StreamAllMeshes(modelId, (flatMesh) => {
     if (seenExpressIDs.has(flatMesh.expressID)) return;
     seenExpressIDs.add(flatMesh.expressID);
     collected.push({ expressID: flatMesh.expressID, config: defaultConfig });
+
+    // Log uncategorized IFC types once per type so we can identify missing categories
+    const line = ifcAPI.GetLine(modelId, flatMesh.expressID);
+    const typeCode = line?.type;
+    if (typeCode != null && !loggedOtherTypes.has(typeCode)) {
+      loggedOtherTypes.add(typeCode);
+      const typeName =
+        ifcTypeCodeToName.get(typeCode) ?? `Unknown(${typeCode})`;
+      console.warn(
+        `[IFC] Uncategorized element type: ${typeName} (code ${typeCode})`,
+      );
+    }
   });
 
   const totalElements = collected.length;
