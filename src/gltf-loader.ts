@@ -113,11 +113,13 @@ export async function loadGltfModel(
 
   // Collect meshes with actual geometry
   const geometryMeshes: Mesh[] = [];
-  let emptyNodeCount = 0;
-
+  const emptyNodes: AbstractMesh[] = [];
   for (const abstractMesh of result.meshes) {
-    if (!(abstractMesh instanceof Mesh) || abstractMesh.getTotalVertices() === 0) {
-      emptyNodeCount++;
+    if (
+      !(abstractMesh instanceof Mesh) ||
+      abstractMesh.getTotalVertices() === 0
+    ) {
+      emptyNodes.push(abstractMesh);
       continue;
     }
     geometryMeshes.push(abstractMesh);
@@ -125,6 +127,13 @@ export async function loadGltfModel(
 
   // Merge meshes by material to minimize draw calls
   const entries = mergeByMaterial(geometryMeshes);
+
+  // Disable truly empty nodes (no children) so they don't contribute to active mesh count
+  for (const node of emptyNodes) {
+    if (node.getChildMeshes(false).length === 0) {
+      node.setEnabled(false);
+    }
+  }
 
   // Freeze materials for performance (wait a frame to let textures finish loading)
   await new Promise((r) => setTimeout(r, 0));
@@ -141,7 +150,7 @@ export async function loadGltfModel(
   );
   console.log(
     `GLTF model loaded: ${entries.length} meshes, ` +
-      `${totalVertices} total vertices, ${emptyNodeCount} empty nodes skipped`,
+      `${totalVertices} total vertices, ${emptyNodes.length} empty nodes disabled`,
   );
 
   return {
