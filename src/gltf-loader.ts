@@ -13,9 +13,7 @@ const MIN_OCCLUSION_VOLUME = 2.0;
  * Merge meshes by material to reduce draw calls.
  * Each material group becomes a single merged mesh.
  */
-function mergeByMaterial(
-  meshes: Mesh[],
-): MeshEntry[] {
+function mergeByMaterial(meshes: Mesh[]): MeshEntry[] {
   // Group meshes by material
   const groups = new Map<number, Mesh[]>();
   for (const mesh of meshes) {
@@ -53,11 +51,11 @@ function mergeByMaterial(
     // Merge all meshes in this material group
     const merged = Mesh.MergeMeshes(
       group,
-      true,  // disposeSource
-      true,  // allow32BitsIndices
+      true, // disposeSource
+      true, // allow32BitsIndices
       undefined,
       false, // subdivideWithSubMeshes
-      true,  // multiMultiMaterials — keeps individual materials
+      true, // multiMultiMaterials — keeps individual materials
     );
 
     if (!merged) {
@@ -66,7 +64,10 @@ function mergeByMaterial(
         mesh.freezeWorldMatrix();
         mesh.doNotSyncBoundingInfo = true;
         mesh.occlusionType = AbstractMesh.OCCLUSION_TYPE_NONE;
-        entries.push({ mesh, originalOcclusionType: AbstractMesh.OCCLUSION_TYPE_NONE });
+        entries.push({
+          mesh,
+          originalOcclusionType: AbstractMesh.OCCLUSION_TYPE_NONE,
+        });
       }
       continue;
     }

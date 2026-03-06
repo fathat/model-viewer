@@ -180,10 +180,22 @@ interface CollectedElement {
  * coordinate systems.  S is its own inverse.
  */
 const NEGATE_Z = Matrix.FromValues(
-  1, 0, 0, 0,
-  0, 1, 0, 0,
-  0, 0, -1, 0,
-  0, 0, 0, 1,
+  1,
+  0,
+  0,
+  0,
+  0,
+  1,
+  0,
+  0,
+  0,
+  0,
+  -1,
+  0,
+  0,
+  0,
+  0,
+  1,
 );
 
 /** Convert an IFC (right-handed) 4×4 transform to Babylon (left-handed): S · M · S */
@@ -584,7 +596,9 @@ function bakeThinInstances(mesh: Mesh): VertexData {
 
   const allPositions = new Float32Array(vertexCount * 3 * instanceCount);
   const allNormals = new Float32Array(vertexCount * 3 * instanceCount);
-  const allUVs = baseUVs ? new Float32Array(vertexCount * 2 * instanceCount) : null;
+  const allUVs = baseUVs
+    ? new Float32Array(vertexCount * 2 * instanceCount)
+    : null;
   const allIndices = new Int32Array(indexCount * instanceCount);
 
   const tmpPos = new Vector3();
@@ -731,7 +745,9 @@ export function mergeLoadedModel(
 
       newEntries.push({
         mesh: merged,
-        meta: representativeEntry.meta ? { ...representativeEntry.meta } : undefined,
+        meta: representativeEntry.meta
+          ? { ...representativeEntry.meta }
+          : undefined,
         expressIDs: allExpressIDs,
         originalOcclusionType: AbstractMesh.OCCLUSION_TYPE_NONE,
       });

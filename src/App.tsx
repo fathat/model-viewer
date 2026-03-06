@@ -1,4 +1,3 @@
-import "./App.css";
 import { ScenePage } from "./ScenePage";
 
 function App() {
