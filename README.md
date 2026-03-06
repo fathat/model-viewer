@@ -1,4 +1,4 @@
-# LMV - IFC & GLTF Model Viewer
+# Model Viewer - IFC & GLTF Model Viewer
 
 A web-based 3D model viewer for IFC and GLTF/GLB files, built with React, Babylon.js, and web-ifc. Designed for viewing large architectural and construction models with real-time performance optimizations.
 
