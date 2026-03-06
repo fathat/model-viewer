@@ -1,5 +1,8 @@
 # Model Viewer - IFC & GLTF Model Viewer
 
+[![Deploy to GitHub Pages](https://github.com/fathat/model-viewer/actions/workflows/deploy.yml/badge.svg)](https://github.
+  com/fathat/model-viewer/actions/workflows/deploy.yml)
+
 A web-based 3D model viewer for IFC and GLTF/GLB files, built with React, Babylon.js, and web-ifc. Designed for viewing large architectural and construction models with real-time performance optimizations.
 
 ![Screenshot](./public/screenshot-1.png)
