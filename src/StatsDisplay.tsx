@@ -21,14 +21,14 @@ export function StatsDisplay(props: {
     <>
       {props.stats && (
         <div className={styles.statsOverlay}>
-          <div style={{ display: "flex", gap: 16 }}>
-            <span>FPS: {props.stats.fps}</span>
-            <span>Frame: {props.stats.frameTime}ms</span>
-            <span>Render: {props.stats.renderTime}ms</span>
-            <span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div>FPS: {props.stats.fps}</div>
+            <div>Frame: {props.stats.frameTime}ms</div>
+            <div>Render: {props.stats.renderTime}ms</div>
+            <div>
               Active: {props.stats.active} / {props.stats.total}
-            </span>
-            <span>Triangles: {props.stats.triangles.toLocaleString()}</span>
+            </div>
+            <div>Triangles: {props.stats.triangles.toLocaleString()}</div>
           </div>
           {props.loadingState != null && (
             <span className={styles.statsLoadingNote}>
