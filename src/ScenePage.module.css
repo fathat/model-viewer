@@ -146,6 +146,20 @@
   font-size: 11px;
 }
 
+.dropOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
+  font-size: 24px;
+  border: 3px dashed rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+}
+
 .errorPill {
   position: fixed;
   bottom: 16px;

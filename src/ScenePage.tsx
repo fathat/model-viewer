@@ -293,6 +293,7 @@ class SceneManager {
 export function ScenePage() {
   const sceneManagerRef = useRef<SceneManager | null>(null);
   const loadedModelRef = useRef<LoadedModel | null>(null);
+  const loadingRef = useRef(false);
   const [loadingState, setLoadingState] = useState<
     null | "extracting" | number
   >(null);
@@ -353,76 +354,113 @@ export function ScenePage() {
 
   const isLoading = loadingState != null;
 
+  const handleFile = useCallback(async (file: File) => {
+    if (loadingRef.current) return;
+
+    const mgr = sceneManagerRef.current;
+    if (!mgr) {
+      console.error("SceneManager not initialized yet -- cannot load model");
+      return;
+    }
+
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    const isGltf = ext === "gltf" || ext === "glb";
+    if (!isGltf && ext !== "ifc") return;
+
+    // Dispose previous model if any
+    loadedModelRef.current?.dispose();
+
+    // Remove placeholder geometry
+    mgr.clearPlaceholder();
+
+    loadingRef.current = true;
+    setLoadingState("extracting");
+    setLoadError(null);
+    try {
+      if (isGltf) {
+        setIfcCategories([]);
+        const model = await loadGltfModel(mgr.scene, file, setLoadingState);
+        loadedModelRef.current = model;
+        mgr.loadedModel = model;
+      } else {
+        const buffer = await file.arrayBuffer();
+        const rawModel = await loadIfcModel(
+          mgr.scene,
+          new Uint8Array(buffer),
+          setLoadingState,
+          (cats) =>
+            setIfcCategories((prev) =>
+              cats.map((c) => ({
+                ...c,
+                visible:
+                  prev.find((p) => p.label === c.label)?.visible ?? true,
+              })),
+            ),
+        );
+        const model = mergeLoadedModel(rawModel, mgr.scene);
+        loadedModelRef.current = model;
+        mgr.loadedModel = model;
+      }
+      mgr.frameBoundingBox();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("Failed to load model:", err);
+      setLoadError(msg);
+    } finally {
+      loadingRef.current = false;
+      setLoadingState(null);
+    }
+  }, []);
+
+  const [dragging, setDragging] = useState(false);
+  const dragCounterRef = useRef(0);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current++;
+    setDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) setDragging(false);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      dragCounterRef.current = 0;
+      setDragging(false);
+      const file = e.dataTransfer.files?.[0];
+      if (file) handleFile(file);
+    },
+    [handleFile],
+  );
+
   return (
-    <>
+    <div
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+      style={{ position: "relative", width: "100%", height: "100%" }}
+    >
       <div className={styles.toolbar}>
         <button
           className={styles.loadButton}
           disabled={isLoading}
           onClick={() => {
-            const mgr = sceneManagerRef.current;
-            if (!mgr) {
-              console.error(
-                "SceneManager not initialized yet -- cannot load model",
-              );
-              return;
-            }
             const input = document.createElement("input");
             input.type = "file";
             input.accept = ".ifc,.gltf,.glb";
-            input.onchange = async () => {
+            input.onchange = () => {
               const file = input.files?.[0];
-              if (!file) return;
-
-              const ext = file.name.split(".").pop()?.toLowerCase();
-              const isGltf = ext === "gltf" || ext === "glb";
-
-              // Dispose previous model if any
-              loadedModelRef.current?.dispose();
-
-              // Remove placeholder geometry
-              mgr.clearPlaceholder();
-
-              setLoadingState("extracting");
-              setLoadError(null);
-              try {
-                if (isGltf) {
-                  setIfcCategories([]);
-                  const model = await loadGltfModel(
-                    mgr.scene,
-                    file,
-                    setLoadingState,
-                  );
-                  loadedModelRef.current = model;
-                  mgr.loadedModel = model;
-                } else {
-                  const buffer = await file.arrayBuffer();
-                  const rawModel = await loadIfcModel(
-                    mgr.scene,
-                    new Uint8Array(buffer),
-                    setLoadingState,
-                    (cats) =>
-                      setIfcCategories((prev) =>
-                        cats.map((c) => ({
-                          ...c,
-                          visible:
-                            prev.find((p) => p.label === c.label)?.visible ??
-                            true,
-                        })),
-                      ),
-                  );
-                  const model = mergeLoadedModel(rawModel, mgr.scene);
-                  loadedModelRef.current = model;
-                  mgr.loadedModel = model;
-                }
-                mgr.frameBoundingBox();
-              } catch (err) {
-                const msg = err instanceof Error ? err.message : String(err);
-                console.error("Failed to load model:", err);
-                setLoadError(msg);
-              } finally {
-                setLoadingState(null);
-              }
+              if (file) handleFile(file);
             };
             input.click();
           }}
@@ -550,6 +588,11 @@ export function ScenePage() {
           )}
         </div>
       )}
-    </>
+      {dragging && (
+        <div className={styles.dropOverlay}>
+          Drop model file here
+        </div>
+      )}
+    </div>
   );
 }
