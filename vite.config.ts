@@ -23,6 +23,20 @@ const wasmMimeMiddleware: import("vite").Connect.NextHandleFunction = (
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: process.env.CI ? "/model-viewer/" : "/",
+  build: {
+    rollupOptions: {
+      output: {
+        // Keep original filenames for .wasm assets (no content hash).
+        // web-ifc's SetWasmPath only sets the directory and appends the
+        // original filename internally, so hashed names break loading.
+        assetFileNames: (assetInfo) =>
+          assetInfo.names?.some((n) => n.endsWith(".wasm"))
+            ? "assets/[name][extname]"
+            : "assets/[name]-[hash][extname]",
+      },
+    },
+  },
   plugins: [
     react(),
 
