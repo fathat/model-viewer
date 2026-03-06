@@ -257,7 +257,7 @@ export function ScenePage() {
             </option>
           ))}
         </select>
-        <label className={styles.ssaoLabel}>
+        <label className={styles.toolbarLabel}>
           <input
             type="checkbox"
             disabled={isLoading}
@@ -267,7 +267,7 @@ export function ScenePage() {
           />
           Ambient Occlusion
         </label>
-        <label className={styles.ssaoLabel}>
+        <label className={styles.toolbarLabel}>
           <input
             type="checkbox"
             defaultChecked
@@ -277,6 +277,17 @@ export function ScenePage() {
             }
           />
           Occlusion Culling
+        </label>
+        <label className={styles.toolbarLabel}>
+          <input
+            type="checkbox"
+            defaultChecked
+            disabled={isLoading}
+            onChange={(e) =>
+              sceneManagerRef.current?.setBackfaceCulling(e.target.checked)
+            }
+          />
+          Backface Culling
         </label>
         <select
           className={styles.envSelect}

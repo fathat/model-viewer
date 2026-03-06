@@ -186,6 +186,15 @@ export class SceneManager {
     this._updateAutoClear();
   }
 
+  setBackfaceCulling(enabled: boolean) {
+    for (const mesh of this.scene.meshes) {
+      const mat = mesh.material;
+      if (mat && "backFaceCulling" in mat) {
+        (mat as PBRMetallicRoughnessMaterial).backFaceCulling = enabled;
+      }
+    }
+  }
+
   setOcclusionEnabled(enabled: boolean) {
     const model = this._loadedModel;
     if (!model) return;

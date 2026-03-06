@@ -9,6 +9,7 @@
   background-color: rgba(0, 0, 0, 0.7);
   padding: 8px 12px;
   border-radius: 8px;
+  user-select: none;
 }
 
 .toolbarButton {
@@ -46,7 +47,7 @@
   cursor: pointer;
 }
 
-.ssaoLabel {
+.toolbarLabel {
   display: flex;
   align-items: center;
   gap: 4px;
