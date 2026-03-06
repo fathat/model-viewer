@@ -306,6 +306,7 @@ export function ScenePage() {
     renderTime: number;
     active: number;
     total: number;
+    triangles: number;
   } | null>(null);
 
   // Poll scene stats whenever the scene is ready.
@@ -319,12 +320,18 @@ export function ScenePage() {
     const id = setInterval(() => {
       const scene = mgr.scene;
       const inst = mgr.instrumentation;
+      let triangles = 0;
+      for (const mesh of scene.meshes) {
+        const indices = mesh.getTotalIndices();
+        if (indices > 0) triangles += indices / 3;
+      }
       setStats({
         fps: Math.round(scene.getEngine().getFps()),
         frameTime: +inst.frameTimeCounter.lastSecAverage.toFixed(1),
         renderTime: +inst.renderTimeCounter.lastSecAverage.toFixed(1),
         active: scene.getActiveMeshes().length,
         total: scene.meshes.length,
+        triangles,
       });
     }, 500);
     return () => clearInterval(id);
@@ -580,6 +587,7 @@ export function ScenePage() {
             <span>
               Active: {stats.active} / {stats.total}
             </span>
+            <span>Triangles: {stats.triangles.toLocaleString()}</span>
           </div>
           {loadingState != null && (
             <span className={styles.statsLoadingNote}>
