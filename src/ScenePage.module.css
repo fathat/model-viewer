@@ -11,7 +11,7 @@
   border-radius: 8px;
 }
 
-.loadButton {
+.toolbarButton {
   padding: 6px 14px;
   background-color: #3b82f6;
   color: white;
@@ -22,11 +22,11 @@
   font-weight: 500;
 }
 
-.loadButton:hover:not(:disabled) {
+.toolbarButton:hover:not(:disabled) {
   background-color: #2563eb;
 }
 
-.loadButton:disabled {
+.toolbarButton:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }

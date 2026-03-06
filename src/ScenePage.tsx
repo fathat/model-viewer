@@ -15,6 +15,7 @@ import rosendalPlainsUrl from "./assets/backgrounds/rosendal_plains_2_2k.hdr?url
 import sunnyRoseGardenUrl from "./assets/backgrounds/sunny_rose_garden_2k.hdr?url";
 
 import { type CameraMode, SceneManager } from "./scene-manager.ts";
+import { StatsDisplay } from "./StatsDisplay.tsx";
 
 interface IfcCategoryState extends IfcCategoryInfo {
   visible: boolean;
@@ -186,6 +187,25 @@ export function ScenePage() {
     [handleFile],
   );
 
+  const onLoadClicked = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".ifc,.gltf,.glb";
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (file) handleFile(file);
+    };
+    input.click();
+  };
+
+  const onResetCameraClicked = () => {
+    const mgr = sceneManagerRef.current;
+    if (!mgr) return;
+    mgr.setCameraMode("orbit");
+    if (cameraModeRef.current) cameraModeRef.current.value = "orbit";
+    mgr.frameBoundingBox();
+  };
+
   return (
     <div
       onDragEnter={handleDragEnter}
@@ -196,31 +216,16 @@ export function ScenePage() {
     >
       <div className={styles.toolbar}>
         <button
-          className={styles.loadButton}
+          className={styles.toolbarButton}
           disabled={isLoading}
-          onClick={() => {
-            const input = document.createElement("input");
-            input.type = "file";
-            input.accept = ".ifc,.gltf,.glb";
-            input.onchange = () => {
-              const file = input.files?.[0];
-              if (file) handleFile(file);
-            };
-            input.click();
-          }}
+          onClick={onLoadClicked}
         >
           Load Model
         </button>
         <button
-          className={styles.loadButton}
+          className={styles.toolbarButton}
           disabled={isLoading}
-          onClick={() => {
-            const mgr = sceneManagerRef.current;
-            if (!mgr) return;
-            mgr.setCameraMode("orbit");
-            if (cameraModeRef.current) cameraModeRef.current.value = "orbit";
-            mgr.frameBoundingBox();
-          }}
+          onClick={onResetCameraClicked}
         >
           Reset Camera
         </button>
@@ -329,24 +334,7 @@ export function ScenePage() {
           ))}
         </div>
       )}
-      {stats && (
-        <div className={styles.statsOverlay}>
-          <div style={{ display: "flex", gap: 16 }}>
-            <span>FPS: {stats.fps}</span>
-            <span>Frame: {stats.frameTime}ms</span>
-            <span>Render: {stats.renderTime}ms</span>
-            <span>
-              Active: {stats.active} / {stats.total}
-            </span>
-            <span>Triangles: {stats.triangles.toLocaleString()}</span>
-          </div>
-          {loadingState != null && (
-            <span className={styles.statsLoadingNote}>
-              Model loading will affect performance
-            </span>
-          )}
-        </div>
-      )}
+      <StatsDisplay stats={stats} loadingState={loadingState} />
       {dragging && (
         <div className={styles.dropOverlay}>Drop model file here</div>
       )}
