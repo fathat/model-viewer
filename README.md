@@ -2,6 +2,8 @@
 
 A web-based 3D model viewer for IFC and GLTF/GLB files, built with React, Babylon.js, and web-ifc. Designed for viewing large architectural and construction models with real-time performance optimizations.
 
+![Screenshot](./public/screenshot-1.png)
+
 ## Features
 
 - **IFC & GLTF/GLB support** — Load industry-standard BIM models (IFC) and general 3D models (GLTF/GLB) via file picker or drag-and-drop
