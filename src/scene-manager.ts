@@ -3,9 +3,12 @@ import {
   ArcRotateCamera,
   type BaseTexture,
   type Camera,
+  Color3,
   FreeCamera,
   HDRCubeTexture,
   HemisphericLight,
+  Mesh,
+  MeshBuilder,
   PBRMetallicRoughnessMaterial,
   PositionGizmo,
   Scene,
@@ -15,6 +18,7 @@ import {
   UtilityLayerRenderer,
   Vector3,
 } from "@babylonjs/core";
+import { GridMaterial } from "@babylonjs/materials";
 import type { LoadedModel } from "./model-types.ts";
 
 /**
@@ -33,6 +37,7 @@ export class SceneManager {
   private gizmo: PositionGizmo | null;
   private gizmoAnchor: TransformNode | null;
   private gizmoLayer: UtilityLayerRenderer | null;
+  private grid: Mesh | null;
   private _cameraMode: CameraMode = "orbit";
   private light: HemisphericLight;
   private envTexture: BaseTexture | null = null;
@@ -86,6 +91,18 @@ export class SceneManager {
       this.scene,
     );
     this.light.intensity = 0.7;
+
+    // Grid ground plane
+    this.grid = MeshBuilder.CreateGround("ground", { width: 100, height: 100 }, scene);
+    const gridMat = new GridMaterial("grid-mat", scene);
+    gridMat.majorUnitFrequency = 10;
+    gridMat.minorUnitVisibility = 0.3;
+    gridMat.gridRatio = 1;
+    gridMat.mainColor = new Color3(1, 1, 1);
+    gridMat.lineColor = new Color3(0.5, 0.5, 0.5);
+    gridMat.opacity = 0.8;
+    gridMat.backFaceCulling = false;
+    this.grid.material = gridMat;
 
     // Axis marker gizmo at the origin
     this.gizmoLayer = new UtilityLayerRenderer(scene);
@@ -271,6 +288,8 @@ export class SceneManager {
     this.gizmoAnchor = null;
     this.gizmoLayer?.dispose();
     this.gizmoLayer = null;
+    this.grid?.dispose();
+    this.grid = null;
   }
 
   onRender() {}
