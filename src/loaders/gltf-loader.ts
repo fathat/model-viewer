@@ -136,11 +136,6 @@ export async function loadGltfModel(
     }
   }
 
-  // Freeze materials for performance (wait a frame to let textures finish loading)
-  await new Promise((r) => setTimeout(r, 0));
-  for (const mat of scene.materials) {
-    mat.freeze();
-  }
 
   // Revoke blob URL after textures have had time to load
   setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);

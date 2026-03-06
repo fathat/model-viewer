@@ -473,10 +473,6 @@ export async function loadIfcModel(
   scene.blockMaterialDirtyMechanism = false;
   scene.markAllMaterialsAsDirty(Constants.MATERIAL_AllDirtyFlag);
 
-  // Freeze materials — model is static, no material property changes after load
-  for (const mat of materialCache.values()) {
-    mat.freeze();
-  }
 
   // All instances added — apply volume-based occlusion filtering.
   // We use the BASE geometry bounding box (single instance, local space) rather
