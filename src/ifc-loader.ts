@@ -13,6 +13,7 @@ import {
 import * as WEBIFC from "web-ifc";
 
 import wasmURL from "web-ifc/web-ifc.wasm?url";
+import { colorKey, rhToLhTransform } from "./ifc-utils.ts";
 
 const ifcAPI = new WEBIFC.IfcAPI();
 
@@ -172,40 +173,8 @@ interface CollectedElement {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Helpers (colorKey, rhToLhTransform imported from ifc-utils.ts)
 // ---------------------------------------------------------------------------
-
-/**
- * Z-negation matrix for converting between right-handed and left-handed Y-up
- * coordinate systems.  S is its own inverse.
- */
-const NEGATE_Z = Matrix.FromValues(
-  1,
-  0,
-  0,
-  0,
-  0,
-  1,
-  0,
-  0,
-  0,
-  0,
-  -1,
-  0,
-  0,
-  0,
-  0,
-  1,
-);
-
-/** Convert an IFC (right-handed) 4×4 transform to Babylon (left-handed): S · M · S */
-function rhToLhTransform(m: Matrix): Matrix {
-  return NEGATE_Z.multiply(m).multiply(NEGATE_Z);
-}
-
-function colorKey(c: { x: number; y: number; z: number; w: number }): string {
-  return `${c.x}_${c.y}_${c.z}_${c.w}`;
-}
 
 function getOrCreateMaterial(
   scene: Scene,
