@@ -231,7 +231,7 @@ export function ScenePage() {
         </button>
         <select
           ref={cameraModeRef}
-          className={styles.envSelect}
+          className={styles.toolbarSelect}
           defaultValue="orbit"
           disabled={isLoading}
           onChange={(e) => {
@@ -244,7 +244,7 @@ export function ScenePage() {
           <option value="free">Free</option>
         </select>
         <select
-          className={styles.envSelect}
+          className={styles.toolbarSelect}
           disabled={isLoading}
           onChange={(e) => {
             const bg = BACKGROUNDS[Number(e.target.value)];
@@ -290,7 +290,7 @@ export function ScenePage() {
           Backface Culling
         </label>
         <select
-          className={styles.envSelect}
+          className={styles.toolbarSelect}
           defaultValue={String(window.devicePixelRatio)}
           disabled={isLoading}
           onChange={(e) => {
