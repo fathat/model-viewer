@@ -414,6 +414,7 @@ export function ScenePage() {
     }
   }, []);
 
+  const cameraModeRef = useRef<HTMLSelectElement>(null);
   const [dragging, setDragging] = useState(false);
   const dragCounterRef = useRef(0);
 
@@ -469,7 +470,21 @@ export function ScenePage() {
         >
           Load Model
         </button>
+        <button
+          className={styles.loadButton}
+          disabled={isLoading}
+          onClick={() => {
+            const mgr = sceneManagerRef.current;
+            if (!mgr) return;
+            mgr.setCameraMode("orbit");
+            if (cameraModeRef.current) cameraModeRef.current.value = "orbit";
+            mgr.frameBoundingBox();
+          }}
+        >
+          Reset Camera
+        </button>
         <select
+          ref={cameraModeRef}
           className={styles.envSelect}
           defaultValue="orbit"
           disabled={isLoading}
