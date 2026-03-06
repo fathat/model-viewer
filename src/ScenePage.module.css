@@ -22,8 +22,18 @@
   font-weight: 500;
 }
 
-.loadButton:hover {
+.loadButton:hover:not(:disabled) {
   background-color: #2563eb;
+}
+
+.loadButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.envSelect:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .envSelect {

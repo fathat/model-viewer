@@ -351,11 +351,14 @@ export function ScenePage() {
     sceneManagerRef.current?.onRender();
   };
 
+  const isLoading = loadingState != null;
+
   return (
     <>
       <div className={styles.toolbar}>
         <button
           className={styles.loadButton}
+          disabled={isLoading}
           onClick={() => {
             const mgr = sceneManagerRef.current;
             if (!mgr) {
@@ -414,8 +417,7 @@ export function ScenePage() {
                 }
                 mgr.frameBoundingBox();
               } catch (err) {
-                const msg =
-                  err instanceof Error ? err.message : String(err);
+                const msg = err instanceof Error ? err.message : String(err);
                 console.error("Failed to load model:", err);
                 setLoadError(msg);
               } finally {
@@ -430,8 +432,11 @@ export function ScenePage() {
         <select
           className={styles.envSelect}
           defaultValue="orbit"
+          disabled={isLoading}
           onChange={(e) => {
-            sceneManagerRef.current?.setCameraMode(e.target.value as CameraMode);
+            sceneManagerRef.current?.setCameraMode(
+              e.target.value as CameraMode,
+            );
           }}
         >
           <option value="orbit">Orbit</option>
@@ -439,6 +444,7 @@ export function ScenePage() {
         </select>
         <select
           className={styles.envSelect}
+          disabled={isLoading}
           onChange={(e) => {
             const bg = BACKGROUNDS[Number(e.target.value)];
             sceneManagerRef.current?.setEnvironment(bg.url);
@@ -453,25 +459,28 @@ export function ScenePage() {
         <label className={styles.ssaoLabel}>
           <input
             type="checkbox"
+            disabled={isLoading}
             onChange={(e) =>
               sceneManagerRef.current?.setSsaoEnabled(e.target.checked)
             }
           />
-          SSAO
+          Ambient Occlusion
         </label>
         <label className={styles.ssaoLabel}>
           <input
             type="checkbox"
             defaultChecked
+            disabled={isLoading}
             onChange={(e) =>
               sceneManagerRef.current?.setOcclusionEnabled(e.target.checked)
             }
           />
-          Occlusion
+          Occlusion Culling
         </label>
         <select
           className={styles.envSelect}
           defaultValue={String(window.devicePixelRatio)}
+          disabled={isLoading}
           onChange={(e) => {
             const engine = sceneManagerRef.current?.scene.getEngine();
             if (engine) {
