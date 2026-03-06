@@ -39,16 +39,3 @@ Open the local URL printed in the terminal. Click **Load Model** or drag and dro
 | `npm run lint`    | Run ESLint                          |
 | `npm run format`  | Format code with Prettier           |
 
-## Project Structure
-
-```
-src/
-├── main.tsx                 # React entry point
-├── App.tsx                  # Root component
-├── ScenePage.tsx            # Main UI: toolbar, panels, scene manager
-├── SceneComponent.tsx       # Babylon.js engine/canvas wrapper
-├── ifc-loader.ts            # IFC loading, instancing, and mesh merging
-├── gltf-loader.ts           # GLTF/GLB loading and material merging
-├── model-types.ts           # Shared TypeScript interfaces
-└── assets/backgrounds/      # HDR environment maps
-```
