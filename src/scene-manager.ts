@@ -3,16 +3,16 @@ import {
   ArcRotateCamera,
   type BaseTexture,
   type Camera,
-  Color3,
   FreeCamera,
   HDRCubeTexture,
   HemisphericLight,
-  Mesh,
-  MeshBuilder,
   PBRMetallicRoughnessMaterial,
+  PositionGizmo,
   Scene,
   SceneInstrumentation,
   SSAO2RenderingPipeline,
+  TransformNode,
+  UtilityLayerRenderer,
   Vector3,
 } from "@babylonjs/core";
 import type { LoadedModel } from "./model-types.ts";
@@ -30,12 +30,13 @@ export type CameraMode = "orbit" | "free";
 export class SceneManager {
   private orbitCamera: ArcRotateCamera;
   private freeCamera: FreeCamera;
-  private displayMesh: Mesh | null;
-  private ground: Mesh | null;
+  private gizmo: PositionGizmo | null;
+  private gizmoAnchor: TransformNode | null;
+  private gizmoLayer: UtilityLayerRenderer | null;
   private _cameraMode: CameraMode = "orbit";
   private light: HemisphericLight;
   private envTexture: BaseTexture | null = null;
-  private skybox: Mesh | null = null;
+  private skybox: AbstractMesh | null = null;
   private ssaoPipeline: SSAO2RenderingPipeline | null = null;
   readonly instrumentation: SceneInstrumentation;
 
@@ -86,27 +87,16 @@ export class SceneManager {
     );
     this.light.intensity = 0.7;
 
-    this.displayMesh = MeshBuilder.CreateBox("box", { size: 2 }, this.scene);
-    this.displayMesh.position.y = 1;
-    const boxMat = new PBRMetallicRoughnessMaterial("box-mat", this.scene);
-    boxMat.baseColor = new Color3(0.8, 0.8, 0.8);
-    boxMat.metallic = 0;
-    boxMat.roughness = 0.8;
-    this.displayMesh.material = boxMat;
-
-    this.ground = MeshBuilder.CreateGround(
-      "ground",
-      { width: 6, height: 6 },
-      this.scene,
-    );
-    const groundMat = new PBRMetallicRoughnessMaterial(
-      "ground-mat",
-      this.scene,
-    );
-    groundMat.baseColor = new Color3(0.5, 0.5, 0.5);
-    groundMat.metallic = 0;
-    groundMat.roughness = 1;
-    this.ground.material = groundMat;
+    // Axis marker gizmo at the origin
+    this.gizmoLayer = new UtilityLayerRenderer(scene);
+    this.gizmoAnchor = new TransformNode("gizmo-anchor", scene);
+    this.gizmo = new PositionGizmo(this.gizmoLayer);
+    this.gizmo.attachedNode = this.gizmoAnchor;
+    for (const axis of [this.gizmo.xGizmo, this.gizmo.yGizmo, this.gizmo.zGizmo]) {
+      axis.dragBehavior.onDragObservable.add(() => {
+        this.gizmoAnchor!.position.setAll(0);
+      });
+    }
 
     scene.skipPointerMovePicking = true;
 
@@ -275,18 +265,14 @@ export class SceneManager {
   }
 
   clearPlaceholder() {
-    this.displayMesh?.dispose();
-    this.displayMesh = null;
-    this.ground?.dispose();
-    this.ground = null;
+    this.gizmo?.dispose();
+    this.gizmo = null;
+    this.gizmoAnchor?.dispose();
+    this.gizmoAnchor = null;
+    this.gizmoLayer?.dispose();
+    this.gizmoLayer = null;
   }
 
-  onRender() {
-    if (!this.displayMesh) return;
+  onRender() {}
 
-    const deltaTimeInMillis = this.scene.getEngine().getDeltaTime();
-    const rpm = 10;
-    this.displayMesh.rotation.y +=
-      (rpm / 60) * Math.PI * 2 * (deltaTimeInMillis / 1000);
-  }
 }
