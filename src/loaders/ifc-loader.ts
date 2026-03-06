@@ -154,8 +154,8 @@ const IFC_TYPE_CONFIGS: IfcTypeConfig[] = [
 // Custom mesh wrapper types
 // ---------------------------------------------------------------------------
 
-import type { MeshEntry, LoadedModel } from "./model-types";
-export type { LoadedModel } from "./model-types";
+import type { MeshEntry, LoadedModel } from "../model-types.ts";
+export type { LoadedModel } from "../model-types.ts";
 
 export interface IfcCategoryInfo {
   label: string;

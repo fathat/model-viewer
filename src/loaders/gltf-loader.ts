@@ -5,7 +5,7 @@ import {
   ImportMeshAsync,
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
-import type { LoadedModel, MeshEntry } from "./model-types";
+import type { LoadedModel, MeshEntry } from "../model-types";
 
 const MIN_OCCLUSION_VOLUME = 2.0;
 

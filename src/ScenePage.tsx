@@ -5,8 +5,8 @@ import {
   type IfcCategoryInfo,
   loadIfcModel,
   mergeLoadedModel,
-} from "./ifc-loader";
-import { loadGltfModel } from "./gltf-loader";
+} from "./loaders/ifc-loader.ts";
+import { loadGltfModel } from "./loaders/gltf-loader.ts";
 import type { LoadedModel } from "./model-types";
 import { useCallback, useEffect, useRef, useState } from "react";
 

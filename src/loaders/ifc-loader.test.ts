@@ -32,7 +32,7 @@ import {
   AbstractMesh,
 } from "@babylonjs/core";
 import { mergeLoadedModel } from "./ifc-loader.ts";
-import type { MeshEntry, LoadedModel } from "./model-types.ts";
+import type { MeshEntry, LoadedModel } from "../model-types.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
