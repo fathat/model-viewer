@@ -77,6 +77,10 @@ class SceneManager {
     this.freeCamera = new FreeCamera("freeCamera", new Vector3(0, 5, -10), scene);
     this.freeCamera.setTarget(Vector3.Zero());
     this.freeCamera.minZ = 0.1;
+    this.freeCamera.keysUp.push(87);    // W
+    this.freeCamera.keysDown.push(83);  // S
+    this.freeCamera.keysLeft.push(65);  // A
+    this.freeCamera.keysRight.push(68); // D
 
     scene.activeCamera = this.orbitCamera;
 
@@ -141,6 +145,7 @@ class SceneManager {
 
   private _hasEnvironment = false;
 
+
   /**
    * Resolve autoClearDepthAndStencil based on environment and SSAO state.
    * SSAO's pre-pass renderer requires a clean depth/stencil each frame, so
@@ -160,11 +165,6 @@ class SceneManager {
 
   /** Create or destroy the SSAO pipeline to match _ssaoEnabled + active camera. */
   private _applySsao() {
-    // Unfreeze materials so the pre-pass renderer can update shader defines
-    for (const mat of this.scene.materials) {
-      mat.unfreeze();
-    }
-
     // Fully tear down old pipeline + pre-pass renderer to avoid stale state
     if (this.ssaoPipeline) {
       this.ssaoPipeline.dispose();
@@ -187,11 +187,6 @@ class SceneManager {
         this.activeCamera,
       );
       this.ssaoPipeline = ssao;
-    }
-
-    // Re-freeze materials after pipeline reconfiguration
-    for (const mat of this.scene.materials) {
-      mat.freeze();
     }
 
     this._updateAutoClear();
